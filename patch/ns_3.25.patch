@@ -1,0 +1,754 @@
+diff -r c43637263fc9 src/applications/model/packet-sink.cc
+--- a/src/applications/model/packet-sink.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/applications/model/packet-sink.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -177,6 +177,11 @@
+                        << InetSocketAddress::ConvertFrom(from).GetIpv4 ()
+                        << " port " << InetSocketAddress::ConvertFrom (from).GetPort ()
+                        << " total Rx " << m_totalRx << " bytes");
++	  if (m_totalRx == 15000000) { //Simulation will terminate when receiving 15 Mb files
++	  std::cout <<Simulator::Now ().GetMilliSeconds() <<std::endl;
++	  std::cout <<"received 15Mb files" <<std::endl;
++	  Simulator::Stop ();
++	  }
+         }
+       else if (Inet6SocketAddress::IsMatchingType (from))
+         {
+diff -r c43637263fc9 src/core/model/default-simulator-impl.cc
+--- a/src/core/model/default-simulator-impl.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/default-simulator-impl.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -17,12 +17,11 @@
+  *
+  * Author: Mathieu Lacage <mathieu.lacage@sophia.inria.fr>
+  */
+-
+ #include "simulator.h"
+ #include "default-simulator-impl.h"
+ #include "scheduler.h"
+ #include "event-impl.h"
+-
++#include "double.h"
+ #include "ptr.h"
+ #include "pointer.h"
+ #include "assert.h"
+@@ -30,7 +29,9 @@
+ 
+ #include <cmath>
+ 
+-
++#include <fstream> //used for open input configuration file 
++#include "global-value.h" //used for random distribution initializion
++#include "rng-seed-manager.h" //used for random seed manager
+ /**
+  * \file
+  * \ingroup simulator
+@@ -73,6 +74,79 @@
+   m_unscheduledEvents = 0;
+   m_eventsWithContextEmpty = true;
+   m_main = SystemThread::Self();
++
++// Initlization for shift gamma random distribution, could be changed for different distributions in the future
++  DoubleValue alpha, beta, shift;
++  GlobalValue::GetValueByName("Gamma_A",alpha);
++  GlobalValue::GetValueByName("Gamma_B",beta);
++  GlobalValue::GetValueByName("Gamma_SFT",shift);
++  Gamma_shift = shift.Get();
++  x= CreateObject<GammaRandomVariable> ();
++  x->SetAttribute ("Alpha", alpha);
++  x->SetAttribute ("Beta", beta);
++	
++  packet_counter = 0;
++  loss_counter = 0;
++
++// Initlization for uniform random distribution
++  DoubleValue loss;
++  double min = 0.0;
++  double max = 100.0;
++  GlobalValue::GetValueByName("Loss_RATE",loss);
++  Loss_rate = loss.Get();
++  x2 = CreateObject<UniformRandomVariable> ();
++  x2->SetAttribute ("Min", DoubleValue (min));
++  x2->SetAttribute ("Max", DoubleValue (max));
++  Speed = 0; // no record;
++  std::ifstream inputFile("/tmp/input_config.txt");
++
++  if (inputFile)
++  {
++  int counter;
++// read the parameters in the configuraion file into a vector
++//e.g., speed alpha beta shift loss_rate app_speed rng_run curr_time
++  inputFile >> counter;
++  for (int i = 0; i < counter ; i ++)
++  {
++  struct Test_Parems new_tmp;
++  inputFile >> new_tmp.speed;
++  inputFile >> new_tmp.sftgma.alpha;
++  inputFile >> new_tmp.sftgma.beta;
++  inputFile >> new_tmp.sftgma.shift;
++  inputFile >> new_tmp.Loss_rate;
++  inputFile >> new_tmp.app_speed;
++  inputFile >> new_tmp.rng_run;
++  inputFile >> new_tmp.cur_time; // used to switch input parameter vector for feedback2
++  
++  RngSeedManager::SetRun (new_tmp.rng_run);
++  new_tmp.gamma_rng= CreateObject<GammaRandomVariable> ();
++  new_tmp.gamma_rng->SetAttribute ("Alpha", DoubleValue(new_tmp.sftgma.alpha));
++  new_tmp.gamma_rng->SetAttribute ("Beta", DoubleValue(new_tmp.sftgma.beta));
++  double min = 0.0;
++  double max = 100.0;
++  new_tmp.uniform_rng = CreateObject<UniformRandomVariable> ();
++  new_tmp.uniform_rng->SetAttribute ("Min", DoubleValue (min));
++  new_tmp.uniform_rng->SetAttribute ("Max", DoubleValue (max));
++  vec_test_parems.push_back(new_tmp);
++  }
++  inputFile.close();
++  
++  markov_state = 0;
++  Gamma_shift =vec_test_parems[markov_state].sftgma.shift;
++  App_Speed =vec_test_parems[markov_state].app_speed;
++  Loss_rate = vec_test_parems[markov_state].Loss_rate;
++  x =vec_test_parems[markov_state].gamma_rng;
++  x2 =vec_test_parems[markov_state].uniform_rng;
++  Speed = vec_test_parems[markov_state].speed;
++  if(vec_test_parems.size() > 1) // more than one input parameter vector
++  {
++  	switch_time = vec_test_parems[0].cur_time;
++  }
++  else
++  {
++  	switch_time = 0;
++  }
++  }
+ }
+ 
+ DefaultSimulatorImpl::~DefaultSimulatorImpl ()
+@@ -93,8 +167,34 @@
+     }
+   m_events = 0;
+   SimulatorImpl::DoDispose ();
++
+ }
+ void
++DefaultSimulatorImpl::ChangeState(void) //add a state transition, we thought it was a "markov transition"
++{	
++  int size =vec_test_parems.size() ;
++  if (size > 1 )
++  {
++    if(markov_state < size - 1) // to add a new state 
++    {
++    int prev_state = markov_state;
++    markov_state ++ ; // to add one more state
++    Gamma_shift =vec_test_parems[markov_state].sftgma.shift;
++    Loss_rate = vec_test_parems[markov_state].Loss_rate;
++    x =vec_test_parems[markov_state].gamma_rng;
++    x2 =vec_test_parems[markov_state].uniform_rng;
++    Speed = vec_test_parems[markov_state].speed;
++    App_Speed = vec_test_parems[markov_state].app_speed;
++    
++    int64_t delay = vec_test_parems[markov_state].cur_time - vec_test_parems[prev_state].cur_time;
++    if (delay > 0)
++    Simulator::Schedule (NanoSeconds(delay), &Simulator::ChangeState);
++    }
++  }	
++  return;
++}
++
++void
+ DefaultSimulatorImpl::Destroy ()
+ {
+   NS_LOG_FUNCTION (this);
+@@ -138,7 +238,6 @@
+ DefaultSimulatorImpl::ProcessOneEvent (void)
+ {
+   Scheduler::Event next = m_events->RemoveNext ();
+-
+   NS_ASSERT (next.key.m_ts >= m_currentTs);
+   m_unscheduledEvents--;
+ 
+@@ -329,7 +428,7 @@
+ {
+   if (id.GetUid () == 2)
+     {
+-      // destroy events.
++      // destroy events.  
+       for (DestroyEvents::iterator i = m_destroyEvents.begin (); i != m_destroyEvents.end (); i++)
+         {
+           if (*i == id)
+@@ -414,4 +513,87 @@
+   return m_currentContext;
+ }
+ 
++void
++DefaultSimulatorImpl::CountPacket (void) 
++{
++  packet_counter++;
++}
++
++void
++DefaultSimulatorImpl::CountLossPacket (void) 
++{
++  loss_counter++;
++}
++
++void
++DefaultSimulatorImpl::CountAckPacket (void) 
++{
++  ack_counter++;
++}
++
++int
++DefaultSimulatorImpl::GetCount (void) 
++{
++  return packet_counter;
++}
++
++int
++DefaultSimulatorImpl::GetTransSpeed (void) 
++{
++  return Speed; // now used for data transmission speed, Mbps unit;
++}
++
++int 
++DefaultSimulatorImpl::GetLossCount (void) 
++{
++  return loss_counter;
++}
++
++int64_t
++DefaultSimulatorImpl::GetInputTest (int i)
++{
++  if (m_currentTs <= 1000000000) // less than 1 ms, used for tcp connection established 
++    return 1000000 ; // 1ms
++  
++  int64_t value = -1; // -1 signal packet loss
++  double loss_value = x2->GetValue ();//uniform random
++  if (loss_value >= Loss_rate) //Not lost
++  {
++    double gma_val = x->GetValue ();
++    value = (gma_val + Gamma_shift)*1000000; //convert from ms to ns
++  }
++  return value;
++}
++
++void
++DefaultSimulatorImpl::PushCount1 (int i)
++{
++  data_counts.push_back(i);// record data packet 
++  return;
++}
++
++void
++DefaultSimulatorImpl::PushCount2 (int i)
++{
++  ack_counts.push_back(i); // record ack packet
++  return;
++}
++
++int
++DefaultSimulatorImpl::GetAppSpeed (int i)
++{
++  return App_Speed;//now used for pass app_speed
++}
++
++int
++DefaultSimulatorImpl::GetInputState (int i)
++{
++  return markov_state;//Transition State
++}
++
++int64_t
++DefaultSimulatorImpl::GetSwitchTime (int i)
++{
++  return switch_time;
++}
+ } // namespace ns3
+diff -r c43637263fc9 src/core/model/default-simulator-impl.h
+--- a/src/core/model/default-simulator-impl.h	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/default-simulator-impl.h	Sun Feb 11 04:13:17 2018 -0600
+@@ -26,6 +26,7 @@
+ #include "event-impl.h"
+ #include "system-thread.h"
+ #include "ns3/system-mutex.h"
++#include "random-variable-stream.h"
+ 
+ #include "ptr.h"
+ 
+@@ -77,6 +78,20 @@
+   virtual void SetScheduler (ObjectFactory schedulerFactory);
+   virtual uint32_t GetSystemId (void) const; 
+   virtual uint32_t GetContext (void) const;
++  
++  int64_t GetInputTest(int i);
++  int64_t GetSwitchTime(int i);
++  int GetAppSpeed(int i);
++  int GetInputState(int i);
++  void CountPacket(void);
++  void CountAckPacket(void);
++  void CountLossPacket(void);
++  void PushCount1(int i);
++  void PushCount2(int i);
++  int GetCount(void);
++  int GetTransSpeed(void);
++  int GetLossCount(void);
++  void ChangeState(void);
+ 
+ private:
+   virtual void DoDispose (void);
+@@ -132,8 +147,49 @@
+ 
+   /** Main execution thread. */
+   SystemThread::ThreadId m_main;
++
++  unsigned int packet_counter;
++  unsigned int ack_counter;
++  unsigned int loss_counter;
++  std::vector<int> test_inputs_data;
++  std::vector<int> test_inputs_ack;
++  std::vector<int> ack_counts;
++  std::vector<int> data_counts;
++  Ptr<GammaRandomVariable> x ;
++  Ptr<UniformRandomVariable> x2 ;
++  Ptr<ExponentialRandomVariable> x3 ;
++
++  uint64_t switch_time;
++  double Gamma_shift;
++  int Gamma_shift_int;
++  double Loss_rate;
++  double Speed;
++  int markov_state;
++  int App_Speed;
++
++  EventId ChangeStateid;
++
++  struct Shift_Gamma
++  {
++    double alpha;
++    double beta;
++    double shift;
++  };
++  
++  struct Test_Parems
++  {
++    double speed; //unit Mbps
++    struct Shift_Gamma sftgma;
++    double Loss_rate;
++    int app_speed;
++    uint64_t cur_time;
++    int rng_run; //used for seed
++    Ptr<GammaRandomVariable> gamma_rng;
++    Ptr<UniformRandomVariable> uniform_rng;
++  };
++
++  std::vector<struct Test_Parems> vec_test_parems; 
+ };
+-
+ } // namespace ns3
+ 
+ #endif /* DEFAULT_SIMULATOR_IMPL_H */
+diff -r c43637263fc9 src/core/model/ptr.h
+--- a/src/core/model/ptr.h	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/ptr.h	Sun Feb 11 04:13:17 2018 -0600
+@@ -72,7 +72,7 @@
+ template <typename T>
+ class Ptr 
+ {
+-private:
++public:
+ 
+   /** The pointer. */
+   T *m_ptr;
+diff -r c43637263fc9 src/core/model/rng-seed-manager.cc
+--- a/src/core/model/rng-seed-manager.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/rng-seed-manager.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -21,6 +21,7 @@
+ #include "global-value.h"
+ #include "attribute-helper.h"
+ #include "integer.h"
++#include "double.h"
+ #include "config.h"
+ #include "log.h"
+ 
+@@ -50,6 +51,29 @@
+                                    "The global seed of all rng streams",
+                                    ns3::IntegerValue(1),
+                                    ns3::MakeIntegerChecker<uint32_t> ());
++
++static ns3::GlobalValue g_Gamma_A ("Gamma_A", 
++                                   "Shape for gamma distribution",
++                                   ns3::DoubleValue(2.5),
++                                   ns3::MakeDoubleChecker<double> ());
++
++static ns3::GlobalValue g_Gamma_B ("Gamma_B", 
++                                   "Scale for gamma distribution",
++								   ns3::DoubleValue(1),
++                                   ns3::MakeDoubleChecker<double> ());
++
++static ns3::GlobalValue g_Gamma_SFT ("Gamma_SFT", 
++                                   "Shift value for shift gamma distribution",
++								   ns3::DoubleValue(107.5),
++                                   ns3::MakeDoubleChecker<double> ());
++
++static ns3::GlobalValue g_Loss_RATE ("Loss_RATE", 
++                                   "Packet Loss rate unit%",
++								   ns3::DoubleValue(1),
++                                   ns3::MakeDoubleChecker<double> ());
++
++
++
+ /**
+  * \relates RngSeedManager
+  * The random number generator run number global value.
+diff -r c43637263fc9 src/core/model/simulator-impl.cc
+--- a/src/core/model/simulator-impl.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/simulator-impl.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -42,4 +42,84 @@
+   return tid;
+ }
+ 
++//below all added by wsun
++void
++SimulatorImpl::CountPacket (void)
++{
++	return ; // just stub function for base class
++}
++
++void
++SimulatorImpl::CountAckPacket (void)
++{
++	return ; // just stub function for base class
++}
++
++
++void
++SimulatorImpl::CountLossPacket (void)
++{
++	return ; // just stub function for base class
++}
++
++int 
++SimulatorImpl::GetCount (void)
++{
++	return 0; // just stub function for base class
++}
++
++int 
++SimulatorImpl::GetTransSpeed (void)
++{
++	return 0; // just stub function for base class
++}
++
++void
++SimulatorImpl::ChangeState (void)
++{
++	return ; // just stub function for base class
++}
++
++int 
++SimulatorImpl::GetLossCount (void)
++{
++	return 0; // just stub function for base class
++}
++
++int64_t
++SimulatorImpl::GetInputTest (int i)
++{
++	return 0; // just stub function for base class
++}
++
++int64_t
++SimulatorImpl::GetSwitchTime (int i)
++{
++	return 0; // just stub function for base class
++}
++
++void
++SimulatorImpl::PushCount1 (int i)
++{
++	return ; // just stub function for base class
++}
++
++void
++SimulatorImpl::PushCount2 (int i)
++{
++	return ; // just stub function for base class
++}
++
++int
++SimulatorImpl::GetAppSpeed (int i)
++{
++	return 0; // just stub function for base class
++}
++
++int
++SimulatorImpl::GetInputState (int i)
++{
++	return 0; // just stub function for base class
++}
++
+ } // namespace ns3
+diff -r c43637263fc9 src/core/model/simulator-impl.h
+--- a/src/core/model/simulator-impl.h	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/simulator-impl.h	Sun Feb 11 04:13:17 2018 -0600
+@@ -99,6 +99,20 @@
+   virtual uint32_t GetSystemId () const = 0; 
+   /** \copydoc Simulator::GetContext */
+   virtual uint32_t GetContext (void) const = 0;
++  
++  virtual void CountPacket(void);
++  virtual void CountAckPacket(void);
++  virtual void CountLossPacket(void);
++  virtual void PushCount1(int i);
++  virtual void PushCount2(int i);
++  virtual int GetCount(void);
++  virtual int GetTransSpeed(void);
++  virtual int GetLossCount(void);
++  virtual void ChangeState(void);
++  virtual int GetAppSpeed(int i);
++  virtual int64_t GetInputTest(int i);
++  virtual int64_t GetSwitchTime(int i);
++  virtual int GetInputState(int i);
+ };
+ 
+ } // namespace ns3
+diff -r c43637263fc9 src/core/model/simulator.cc
+--- a/src/core/model/simulator.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/simulator.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -392,8 +392,83 @@
+   NS_LOG_FUNCTION_NOARGS ();
+   return GetImpl ();
+ }
++//You need to add similar functions if want to add new input parameter or features 
++void
++Simulator::CountPacket(void)
++{
++	return GetImpl()->CountPacket();
++}
+ 
++void
++Simulator::CountAckPacket(void)
++{
++	return GetImpl()->CountAckPacket();
++}
+ 
++void
++Simulator::CountLossPacket(void)
++{
++	return GetImpl()->CountLossPacket();
++}
++
++int
++Simulator::GetCount(void)
++{
++	return GetImpl()->GetCount();
++}
++
++int
++Simulator::GetTransSpeed(void)
++{
++	return GetImpl()->GetTransSpeed();
++}
++
++int
++Simulator::GetLossCount(void)
++{
++	return GetImpl()->GetLossCount();
++}
++
++int64_t
++Simulator::GetInputTest(int i)
++{
++	return GetImpl()->GetInputTest(i);
++}
++
++void
++Simulator::PushCount1(int i)
++{
++	return GetImpl()->PushCount1(i);
++}
++
++void
++Simulator::PushCount2(int i)
++{
++	return GetImpl()->PushCount2(i);
++}
++
++int
++Simulator::GetAppSpeed(int i)
++{
++	return GetImpl()->GetAppSpeed(i);
++}
++
++int
++Simulator::GetInputState(int i)
++{
++	return GetImpl()->GetInputState(i);
++}
++
++void
++Simulator::ChangeState(void)
++{
++	return GetImpl()->ChangeState();
++}
++
++int64_t
++Simulator::GetSwitchTime(int i)
++{
++	return GetImpl()->GetSwitchTime(i);
++}
+ 
+ } // namespace ns3
+-
+diff -r c43637263fc9 src/core/model/simulator.h
+--- a/src/core/model/simulator.h	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/core/model/simulator.h	Sun Feb 11 04:13:17 2018 -0600
+@@ -1080,6 +1080,22 @@
+    * @returns @c true if the event has expired, false otherwise.
+    */
+   static bool IsExpired (const EventId &id);
++	
++  
++  static void CountPacket(void);
++  static void CountAckPacket(void);
++  static void CountLossPacket(void);
++  static int GetCount(void);
++  static int GetTransSpeed(void);
++  static int GetLossCount(void);
++  static int GetAppSpeed(int i);
++  static void ChangeState(void);
++  static int GetInputState(int i);
++  static void PushCount1(int i);
++  static void PushCount2(int i);
++  static int64_t GetInputTest(int i);
++  static int64_t GetSwitchTime(int i);
++
+ 
+   /**
+    * Return the current simulation virtual time.
+diff -r c43637263fc9 src/network/model/buffer.h
+--- a/src/network/model/buffer.h	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/network/model/buffer.h	Sun Feb 11 04:13:17 2018 -0600
+@@ -636,7 +636,6 @@
+    */
+   Buffer (uint32_t dataSize, bool initialize);
+   ~Buffer ();
+-private:
+   /**
+    * This data structure is variable-sized through its last member whose size
+    * is determined at allocation time and stored in the m_size field.
+diff -r c43637263fc9 src/network/model/packet.h
+--- a/src/network/model/packet.h	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/network/model/packet.h	Sun Feb 11 04:13:17 2018 -0600
+@@ -700,7 +700,7 @@
+     (Ptr<const Packet> packet, double sinr);
+     
+   
+-private:
++public:
+   /**
+    * \brief Constructor
+    * \param buffer the packet buffer
+diff -r c43637263fc9 src/network/utils/data-rate.cc
+--- a/src/network/utils/data-rate.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/network/utils/data-rate.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -22,6 +22,7 @@
+ #include "ns3/nstime.h"
+ #include "ns3/fatal-error.h"
+ #include "ns3/log.h"
++#include "ns3/simulator.h"
+ 
+ namespace ns3 {
+   
+@@ -236,7 +237,9 @@
+ {
+   NS_LOG_FUNCTION (this << bytes);
+   // \todo avoid to use double (if possible).
+-  return Seconds (static_cast<double>(bytes)*8/m_bps);
++  uint64_t speed = Simulator::GetTransSpeed()* 100000; // pleas make sure speed unit is 0.1Mbps
++  if (speed == 0) speed = m_bps ;//unit, Mbps
++  return Seconds (static_cast<double>(bytes)*8/speed); // here we change the Transmission Speed given input paremeter
+ }
+ 
+ Time DataRate::CalculateBitsTxTime (uint32_t bits) const
+diff -r c43637263fc9 src/network/utils/pcap-file.cc
+--- a/src/network/utils/pcap-file.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/network/utils/pcap-file.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -439,12 +439,13 @@
+   NS_BUILD_DEBUG(m_file.flush());
+ }
+ 
+-void 
++void
+ PcapFile::Write (uint32_t tsSec, uint32_t tsUsec, Ptr<const Packet> p)
+ {
+   NS_LOG_FUNCTION (this << tsSec << tsUsec << p);
+   uint32_t inclLen = WritePacketHeader (tsSec, tsUsec, p->GetSize ());
+   p->CopyData (&m_file, inclLen);
++  m_file.flush();//othwise it may loss some packets in Pcap file
+   NS_BUILD_DEBUG(m_file.flush());
+ }
+ 
+diff -r c43637263fc9 src/network/utils/queue.cc
+--- a/src/network/utils/queue.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/network/utils/queue.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -44,7 +44,7 @@
+                                     QUEUE_MODE_PACKETS, "QUEUE_MODE_PACKETS"))
+     .AddAttribute ("MaxPackets",
+                    "The maximum number of packets accepted by this queue.",
+-                   UintegerValue (100),
++                   UintegerValue (10000), // Change to a large value for large cwnd otherwise it will drop packets (i.e., queue size bottleneck)
+                    MakeUintegerAccessor (&Queue::SetMaxPackets,
+                                          &Queue::GetMaxPackets),
+                    MakeUintegerChecker<uint32_t> ())
+diff -r c43637263fc9 src/point-to-point/model/point-to-point-channel.cc
+--- a/src/point-to-point/model/point-to-point-channel.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/point-to-point/model/point-to-point-channel.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -97,10 +97,26 @@
+ 
+   uint32_t wire = src == m_link[0].m_src ? 0 : 1;
+ 
++  if (p.m_ptr->m_buffer.m_data->m_data[p.m_ptr->m_buffer.m_start+2] == 0x45)
++  { // only for IPV4 packet
++
++  int64_t input_delay;
++
++  input_delay = Simulator::GetInputTest(0);// here we manuplated the delay
++ 
++  if (input_delay !=-1 ){
++  Time new_delay_time(NanoSeconds(input_delay));
++  m_delay = new_delay_time ;
+   Simulator::ScheduleWithContext (m_link[wire].m_dst->GetNode ()->GetId (),
+                                   txTime + m_delay, &PointToPointNetDevice::Receive,
+                                   m_link[wire].m_dst, p);
+-
++  }
++  }
++  else {//we donot change packet delay for other non-ipv4 packet
++  Simulator::ScheduleWithContext (m_link[wire].m_dst->GetNode ()->GetId (),
++                                  txTime + m_delay, &PointToPointNetDevice::Receive,
++                                  m_link[wire].m_dst, p);
++  }
+   // Call the tx anim callback on the net device
+   m_txrxPointToPoint (p, src, m_link[wire].m_dst, txTime, txTime + m_delay);
+   return true;
+diff -r c43637263fc9 src/point-to-point/model/point-to-point-net-device.cc
+--- a/src/point-to-point/model/point-to-point-net-device.cc	Wed Mar 23 21:34:07 2016 -0700
++++ b/src/point-to-point/model/point-to-point-net-device.cc	Sun Feb 11 04:13:17 2018 -0600
+@@ -363,6 +363,19 @@
+   NS_LOG_FUNCTION (this << packet);
+   uint16_t protocol = 0;
+ 
++  /* below is our previous attempt to manipulate something before delivering to upper layer TCP in receive-side, now it may not work, leaving it for reference 
++  if (packet.m_ptr->m_buffer.m_data->m_data[packet.m_ptr->m_buffer.m_start+2] == 0x45){  // only for IPV4 packet
++  if (packet.m_ptr->m_buffer.m_data->m_data[packet.m_ptr->m_buffer.m_start+25] != 0xd0){ // only for packet from server(ACK)
++   int upper = packet.m_ptr->m_buffer.m_data->m_data[packet.m_ptr->m_buffer.m_start+22];
++   int lower = packet.m_ptr->m_buffer.m_data->m_data[packet.m_ptr->m_buffer.m_start+23];
++   int count = 256*upper+lower;
++   Simulator::PushCount1(std::make_pair<int, int>(2, count)); //Type 2 for Ack arrived at the client
++   						//revert the count to the original source address;
++	packet.m_ptr->m_buffer.m_data->m_data[packet.m_ptr->m_buffer.m_start+22] = 0x7;
++	packet.m_ptr->m_buffer.m_data->m_data[packet.m_ptr->m_buffer.m_start+23] =0xd0;
++  }
++  }*/
++
+   if (m_receiveErrorModel && m_receiveErrorModel->IsCorrupt (packet) ) 
+     {
+       // 

@@ -1,0 +1,443 @@
+diff -r 5a67b7279bb4 example/dce-linux.cc
+--- a/example/dce-linux.cc	Sun Mar 13 22:08:41 2016 +0900
++++ b/example/dce-linux.cc	Sun Feb 11 18:05:00 2018 -0600
+@@ -6,163 +6,197 @@
+ #include "ns3/wifi-module.h"
+ #include "ns3/mobility-module.h"
+ #include "ns3/internet-module.h"
++#include "ns3/applications-module.h"
+ #include <fstream>
++using namespace ns3;
++#define DEBUG 0
+ 
+-using namespace ns3;
+ NS_LOG_COMPONENT_DEFINE ("DceLinux");
++std::string transProt = "cubic"; // Configure TCP CA algorithm Cubic
+ 
+-static void RunIp (Ptr<Node> node, Time at, std::string str)
++class MyApp : public Application
+ {
+-  DceApplicationHelper process;
+-  ApplicationContainer apps;
+-  process.SetBinary ("ip");
+-  process.SetStackSize (1 << 16);
+-  process.ResetArguments ();
+-  process.ParseArguments (str.c_str ());
+-  apps = process.Install (node);
+-  apps.Start (at);
++public:
++
++	MyApp ();
++	virtual ~MyApp();
++
++	void Setup (Ptr<Node> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
++
++private:
++	virtual void StartApplication (void);
++	virtual void StopApplication (void);
++
++	void ScheduleTx (void);
++	void SendPacket (void);
++
++	Ptr<Socket>     m_socket;
++	Ptr<Node>       m_node;
++	Address         m_peer;
++	uint32_t        m_packetSize;
++	uint32_t        m_nPackets;
++	DataRate        m_dataRate;
++	EventId         m_sendEvent;
++	bool            m_running;
++	uint32_t        m_packetsSent;
++};
++
++MyApp::MyApp ()
++	: m_socket (0),
++	  m_peer (),
++	  m_packetSize (0),
++	  m_nPackets (0),
++	  m_dataRate (0),
++	  m_sendEvent (),
++	  m_running (false),
++	  m_packetsSent (0)
++{
+ }
+ 
++MyApp::~MyApp()
++{
++	m_socket = 0;
++}
++
++void
++MyApp::Setup (Ptr<Node> node, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate)
++{
++	m_node = node;
++	m_peer = address;
++	m_packetSize = packetSize;
++	m_nPackets = nPackets;
++	m_dataRate = dataRate;
++	int64_t switching_time = Simulator::GetSwitchTime(0);
++	if (DEBUG) std::cout <<"switching time:" << switching_time << std::endl;
++
++	if (switching_time != 0)
++	Simulator::Schedule (NanoSeconds(switching_time), &Simulator::ChangeState); // Scheduled if it applies feedback2
++}
++
++void
++MyApp::StartApplication (void)
++{
++	m_running = true;
++	m_packetsSent = 0;
++	Ptr<Socket> LinuxTcpSocket = Socket::CreateSocket (m_node, LinuxTcpSocketFactory::GetTypeId ());
++	m_socket = LinuxTcpSocket;
++	m_socket->Bind ();
++	m_socket->Connect (m_peer);
++
++	Simulator::Schedule (Seconds(1.5), &MyApp::SendPacket, this); //Now waiting for tcp established then start to send APP packets;
++
++	if (DEBUG) std::cout << "start application" << std::endl;
++}
++
++void
++MyApp::StopApplication (void)
++{
++	m_running = false;
++
++	if (m_sendEvent.IsRunning ())
++	{
++		Simulator::Cancel (m_sendEvent);
++	}
++
++	if (m_socket)
++	{
++		m_socket->Close ();
++	}
++}
++
++void
++MyApp::SendPacket (void)
++{
++	Ptr<Packet> packet = Create<Packet> (m_packetSize);
++	int actual = m_socket->Send (packet);
++
++	if (++m_packetsSent < m_nPackets)
++	{
++		ScheduleTx ();
++	}
++}
++
++void
++MyApp::ScheduleTx (void)
++{
++	uint64_t dataRate = Simulator::GetAppSpeed(0) * 1000; //unit 1: kb
++
++	if (m_running)
++	{
++		Time tNext (Seconds (m_packetSize * 8 / static_cast<double> (dataRate)));
++		m_sendEvent = Simulator::Schedule (tNext, &MyApp::SendPacket, this);
++	}
++}
++
++
+ void
+ PrintTcpFlags (std::string key, std::string value)
+ {
+-  NS_LOG_INFO (key << "=" << value);
++	std::cout << key << "=" << value << std::endl;
+ }
+ 
+ int main (int argc, char *argv[])
+ {
+-  CommandLine cmd;
+-  char linkType = 'p'; // P2P
+-  bool reliable = true;
++	CommandLine cmd;
++	std::string data_rate = "100Gbps";
+ 
+-  cmd.AddValue ("linkType", "Link type: ie : C for CSMA, P for Point to Point and w for Wifi, default to P2P", linkType);
+-  cmd.AddValue ("reliable", "If true use TCP transport else UDP, default is TCP", reliable);
+-  cmd.Parse (argc, argv);
+-  linkType = tolower (linkType);
+-  switch (linkType)
+-    {
+-    case 'c':
+-    case 'p':
+-    case 'w':
+-      break;
+-    default:
+-      std::cout << "Unknown link type : " << linkType << " ?" << std::endl;
+-      return 1;
+-    }
++	NodeContainer nodes;
++	nodes.Create (2);
+ 
+-  NodeContainer nodes;
+-  nodes.Create (2);
++	NetDeviceContainer devices;
+ 
+-  NetDeviceContainer devices;
++	PointToPointHelper p2p;
++	p2p.SetDeviceAttribute ("DataRate", StringValue (data_rate));
++	p2p.SetChannelAttribute ("Delay", StringValue ("1ms"));
++	devices = p2p.Install (nodes);
++	//p2p.EnablePcap ("process-linux", devices, true); // enable pcap file when debug
+ 
+-  switch (linkType)
+-    {
+-    case 'c':
+-      {
+-        CsmaHelper csma;
+-        csma.SetChannelAttribute ("DataRate", StringValue ("5Mbps"));
+-        csma.SetChannelAttribute ("Delay", StringValue ("2ms"));
+-        devices = csma.Install (nodes);
+-        csma.EnablePcapAll ("process-linux");
+-      }
+-      break;
++	DceManagerHelper processManager;
++	processManager.SetNetworkStack ("ns3::LinuxSocketFdFactory", "Library", StringValue ("liblinux.so"));
++	processManager.Install (nodes);
++	LinuxStackHelper stack;
++	stack.Install (nodes);
+ 
+-    case 'p':
+-      {
+-        PointToPointHelper p2p;
+-        p2p.SetDeviceAttribute ("DataRate", StringValue ("5Gbps"));
+-        p2p.SetChannelAttribute ("Delay", StringValue ("1ms"));
+-        devices = p2p.Install (nodes);
+-        p2p.EnablePcapAll ("process-linux");
+-      }
+-      break;
++	Ipv4AddressHelper address;
++	address.SetBase ("10.0.0.0", "255.255.255.0");
++	Ipv4InterfaceContainer interfaces = address.Assign (devices);
+ 
+-    case 'w':
+-      {
+-        MobilityHelper mobility;
+-        Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+-        positionAlloc->Add (Vector (0.0, 0.0, 0.0));
+-        positionAlloc->Add (Vector (5.0, 0.0, 0.0));
+-        mobility.SetPositionAllocator (positionAlloc);
+-        mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+-        mobility.Install (nodes);
++	Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
++	LinuxStackHelper::PopulateRoutingTables ();
+ 
+-        WifiHelper wifi = WifiHelper::Default ();
+-        YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
+-        YansWifiChannelHelper phyChannel = YansWifiChannelHelper::Default ();
+-        NqosWifiMacHelper mac;
+-        phy.SetChannel (phyChannel.Create ());
+-        mac.SetType ("ns3::AdhocWifiMac");
+-        wifi.SetStandard (WIFI_PHY_STANDARD_80211a);
+-        devices = wifi.Install (phy, mac, nodes);
+-        phy.EnablePcapAll ("process-linux");
+-      }
+-      break;
++	DceApplicationHelper process;
++	ApplicationContainer apps;
++	process.SetStackSize (1 << 20);
+ 
+-    default:
+-      break;
+-    }
++	//linux parems configuration
++	stack.SysctlSet (nodes, ".net.core.wmem_max", "134217728");
++	stack.SysctlSet (nodes, ".net.core.rmem_max", "134217728");
++	stack.SysctlSet (nodes, ".net.ipv4.tcp_rmem", "4096 87380 67108864");
++	stack.SysctlSet (nodes, ".net.ipv4.tcp_wmem", "4096 25000000 67108864"); // changed for application buffer
++	stack.SysctlSet (nodes, ".net.ipv4.tcp_mem", "196608 262144 393216");//
++	stack.SysctlSet (nodes, ".net.ipv4.tcp_congestion_control", transProt); // done at 0.1 seconds
++	stack.SysctlSet (nodes, ".net.ipv4.tcp_no_metrics_save", "0");
+ 
+-  DceManagerHelper processManager;
+-  // processManager.SetLoader ("ns3::DlmLoaderFactory");
+-  processManager.SetNetworkStack ("ns3::LinuxSocketFdFactory", "Library", StringValue ("liblinux.so"));
+-  processManager.Install (nodes);
+-  LinuxStackHelper stack;
+-  stack.Install (nodes);
++	//application configuration
++	std::string sock_factory = "ns3::LinuxTcpSocketFactory";
++	Address sinkAddress (InetSocketAddress (Ipv4Address ("10.0.0.1"), 2000));
++	Ptr<MyApp> app = CreateObject<MyApp> ();
++	app->Setup (nodes.Get (1), sinkAddress, 1500, 10000, DataRate ("100Mbps")); // 15 Mb file, hardcoded in the sink application to re
++	nodes.Get (1)->AddApplication (app);
++	app->SetStartTime (Seconds (0.5));
++//	app->SetStopTime (Seconds (20.)); // Current NS3 will explictly terminate when receiving 15 Mb file
+ 
+-  Ipv4AddressHelper address;
+-  address.SetBase ("10.0.0.0", "255.255.255.0");
+-  Ipv4InterfaceContainer interfaces = address.Assign (devices);
+ 
+-  Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
+-  LinuxStackHelper::PopulateRoutingTables ();
++	PacketSinkHelper sink = PacketSinkHelper (sock_factory,
++	                        InetSocketAddress (Ipv4Address::GetAny (), 2000));
++	apps = sink.Install (nodes.Get(0));
++	apps.Start (Seconds (0.4));
+ 
+-  for (int n = 0; n < 2; n++)
+-    {
+-      RunIp (nodes.Get (n), Seconds (0.2), "link show");
+-      RunIp (nodes.Get (n), Seconds (0.3), "route show table all");
+-      RunIp (nodes.Get (n), Seconds (0.4), "addr list");
+-    }
+ 
+-  DceApplicationHelper process;
+-  ApplicationContainer apps;
++	Simulator::Stop (Seconds (20000000));
++	Simulator::Run ();
+ 
+-  if (reliable)
+-    {
+-      process.SetBinary ("tcp-server");
+-      process.ResetArguments ();
+-      process.SetStackSize (1 << 16);
+-      apps = process.Install (nodes.Get (0));
+-      apps.Start (Seconds (1.0));
++	Simulator::Destroy ();
+ 
+-      process.SetBinary ("tcp-client");
+-      process.ResetArguments ();
+-      process.ParseArguments ("10.0.0.1");
+-      apps = process.Install (nodes.Get (1));
+-      apps.Start (Seconds (1.5));
+-    }
+-  else
+-    {
+-      process.SetBinary ("udp-server");
+-      process.ResetArguments ();
+-      process.SetStackSize (1 << 16);
+-      apps = process.Install (nodes.Get (0));
+-      apps.Start (Seconds (1.0));
+-
+-      process.SetBinary ("udp-client");
+-      process.ResetArguments ();
+-      process.ParseArguments ("10.0.0.1");
+-      apps = process.Install (nodes.Get (1));
+-      apps.Start (Seconds (1.5));
+-    }
+-
+-  // print tcp sysctl value
+-  LinuxStackHelper::SysctlGet (nodes.Get (0), Seconds (1.0),
+-                               ".net.ipv4.tcp_available_congestion_control", &PrintTcpFlags);
+-
+-  Simulator::Stop (Seconds (2000000.0));
+-  Simulator::Run ();
+-  Simulator::Destroy ();
+-
+-  return 0;
++	return 0;
+ }
+diff -r 5a67b7279bb4 model/kernel-socket-fd-factory.cc
+--- a/model/kernel-socket-fd-factory.cc	Sun Mar 13 22:08:41 2016 +0900
++++ b/model/kernel-socket-fd-factory.cc	Sun Feb 11 18:05:00 2018 -0600
+@@ -128,11 +128,25 @@
+   m_listeners.clear ();
+ }
+ 
++//manuiplate "printk" used for linux kernel 3.10 (its a core function for logging traces)
++int total_count = -31; // To remove unrelated linux initalization in log files
+ int
+ KernelSocketFdFactory::Vprintf (struct SimKernel *kernel, const char *str, va_list args)
+ {
++  int id = UtilsGetNodeId() ;
++
++  if (id == 0) return 1;
++
++  if (total_count < 1) {
++  	  total_count++;
++	  return 1;
++  }
++
++  char buffer[100];
++  snprintf (buffer, 100, "%s,u:%lu\n", str, Simulator::Now ().GetNanoSeconds());
++  // It will append the timestample info in the string of "printk" function
+   KernelSocketFdFactory *self = (KernelSocketFdFactory *)kernel;
+-  return vfprintf (self->m_logFile, str, args);
++  return vfprintf (self->m_logFile, buffer, args);
+ }
+ 
+ void *
+@@ -345,10 +359,24 @@
+ void
+ KernelSocketFdFactory::TaskWait (struct SimKernel *kernel)
+ {
++
++  KernelSocketFdFactory *self = (KernelSocketFdFactory *)kernel;
+   // force initialization of 'current'
+   TaskCurrent (kernel);
++  self->m_loader->NotifyEndExecute ();
++/*
++  The problem: 
++A process(a node in ns3) goes to sleep with its own kernel's stack  and it wakes up with a different kernel's stack of other nodes.  
++Since the net part of the kernel does not carry much of its state on the stack, which is not easy to observe by external Pcap traces(i.e., I occasionally find it when to printk() information inside the kernel).  Some of the crucial things on the stack are the timers. the g_pending_events and the g_expired_events list heads (in sim/timer.c),  where it keeps track of the tasks attached to timers. For a experiment with a large number of packets, the timer information is very important. 
++Root-cause: 
++The CoojaLoader used in dce loads just one copy of each shared library (i.e., the Linux kernel) and makes several copies of the stack, one for each process(i.e., node) requiring the kernel. It is the implicit responsibility of each process to call ->NotifyStartExecute() to make sure that the loaded library is working with the correct stack. Otherwise, it will generate some strange results.(i.e., kernel stack variable inconsistent when Task switching in different nodes) 
++
++Fix:
++To add calls to update stack in TaskWait and TaskYield in related places; 
++*/
+   // now, sleep.
+   TaskManager::Current ()->Sleep ();
++  self->m_loader->NotifyStartExecute ();
+ }
+ int
+ KernelSocketFdFactory::TaskWakeup (struct SimKernel *kernel, struct SimTask *task)
+@@ -367,10 +395,16 @@
+ void
+ KernelSocketFdFactory::TaskYield (struct SimKernel *kernel)
+ {
++
++  KernelSocketFdFactory *self = (KernelSocketFdFactory *)kernel;
+   // force initialization of 'current'
+   TaskCurrent (kernel);
++
++  self->m_loader->NotifyEndExecute ();
+   // now, yield.
+   TaskManager::Current ()->Yield ();
++
++  self->m_loader->NotifyStartExecute ();
+ }
+ void
+ KernelSocketFdFactory::SendMain (bool *r, NetDevice *dev, Ptr<Packet> p, const Address& d, uint16_t pro)
+@@ -391,6 +425,7 @@
+     unsigned char   h_source[6];
+     uint16_t        h_proto;
+   } *hdr = (struct ethhdr *)data;
++
+   data += 14;
+   len -= 14;
+   Ptr<Packet> p = Create<Packet> (data, len);
+@@ -399,7 +434,6 @@
+   dest.CopyFrom (hdr->h_dest);
+   TaskManager *manager = TaskManager::Current ();
+   bool r = false;
+-
+   manager->ExecOnMain (MakeEvent (&KernelSocketFdFactory::SendMain, &r, nsDev, p, dest, protocol));
+ }
+ 
+diff -r 5a67b7279bb4 model/pthread-fiber-manager.cc
+--- a/model/pthread-fiber-manager.cc	Sun Mar 13 22:08:41 2016 +0900
++++ b/model/pthread-fiber-manager.cc	Sun Feb 11 18:05:00 2018 -0600
+@@ -163,7 +163,7 @@
+     // this is a CPU optimization: we make sure that
+     // there is indeed data to save and restore before
+     // switching to a temporary stack to do save/restore.
+-    if (previous != next)
++    //if (previous != next) // In case stack inconsistence here we alaways refresh stack
+       {
+         VALGRIND_MAKE_MEM_DEFINED (m_stack, SIGSTKSZ);
+         longjmp (m_buf, 1);
+diff -r 5a67b7279bb4 wscript
+--- a/wscript	Sun Mar 13 22:08:41 2016 +0900
++++ b/wscript	Sun Feb 11 18:05:00 2018 -0600
+@@ -415,7 +415,7 @@
+                        target='bin/dce-linux-simple',
+                        source=['example/dce-linux-simple.cc'])
+ 
+-    module.add_example(needed = ['core', 'network', 'dce', 'wifi', 'point-to-point', 'csma', 'mobility' ],
++    module.add_example(needed = ['core', 'network', 'dce', 'applications','point-to-point'], ##Change to fit the current dce-linux.cc 
+                        target='bin/dce-linux',
+                        source=['example/dce-linux.cc'])
+ 

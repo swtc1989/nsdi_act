@@ -1,0 +1,118 @@
+diff --git a/net/ipv4/tcp_cubic.c b/net/ipv4/tcp_cubic.c
+index a9077f4..7a2f1ef 100644
+--- a/net/ipv4/tcp_cubic.c
++++ b/net/ipv4/tcp_cubic.c
+@@ -140,7 +140,13 @@ static inline void bictcp_hystart_reset(struct sock *sk)
+ }
+ 
+ static void bictcp_init(struct sock *sk)
+-{
++{	
++	/*
++	//Below is the example to enable cubic feature in source code, current DCE cannot configure it like Linux cmd
++	hystart = 1;  
++	fast_convergence = 1;
++	tcp_friendliness = 1;
++	*/
+ 	struct bictcp *ca = inet_csk_ca(sk);
+ 
+ 	bictcp_reset(ca);
+@@ -300,6 +306,8 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
+ 	ca->cnt = (ca->cnt << ACK_RATIO_SHIFT) / ca->delayed_ack;
+ 	if (ca->cnt == 0)			/* cannot be zero */
+ 		ca->cnt = 1;
++
++	printk("[bic_update] ca->cnt:%u, bic_target:%u", ca->cnt, bic_target); // CA algorithm-specific log trace used for feedback, you could add more according to target variables in related probe places 
+ }
+ 
+ static void bictcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
+diff --git a/net/ipv4/tcp_htcp.c b/net/ipv4/tcp_htcp.c
+index c1a8175..9844252 100644
+--- a/net/ipv4/tcp_htcp.c
++++ b/net/ipv4/tcp_htcp.c
+@@ -224,6 +224,9 @@ static u32 htcp_recalc_ssthresh(struct sock *sk)
+ 	const struct htcp *ca = inet_csk_ca(sk);
+ 
+ 	htcp_param_update(sk);
++
++	printk("[alph_update] c:%u, a:%u,res:%d", tp->snd_cwnd, ca->alpha, (ca->alpha>>7) >= tp->snd_cwnd ? 1 : 0);
++
+ 	return max((tp->snd_cwnd * ca->beta) >> 7, 2U);
+ }
+ 
+@@ -246,6 +249,7 @@ static void htcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
+ 				tp->snd_cwnd++;
+ 			tp->snd_cwnd_cnt = 0;
+ 			htcp_alpha_update(ca);
++		printk("[alph_update] c:%u, a:%u,res:%d", tp->snd_cwnd, ca->alpha, (ca->alpha>>7) >= tp->snd_cwnd ? 1:0 );
+ 		} else
+ 			tp->snd_cwnd_cnt += ca->pkts_acked;
+ 
+diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
+index 9c62257..bb9fa99 100644
+--- a/net/ipv4/tcp_input.c
++++ b/net/ipv4/tcp_input.c
+@@ -2310,6 +2310,8 @@ static void DBGUNDO(struct sock *sk, const char *msg)
+ static void tcp_undo_cwr(struct sock *sk, const bool undo_ssthresh)
+ {
+ 	struct tcp_sock *tp = tcp_sk(sk);
++	//int before_cwnd = tp->snd_cwnd; // Previous used for logging
++	//int before_ssthresh = tp->snd_ssthresh; // Previous used for logging
+ 
+ 	if (tp->prior_ssthresh) {
+ 		const struct inet_connection_sock *icsk = inet_csk(sk);
+@@ -2327,6 +2329,10 @@ static void tcp_undo_cwr(struct sock *sk, const bool undo_ssthresh)
+ 		tp->snd_cwnd = max(tp->snd_cwnd, tp->snd_ssthresh);
+ 	}
+ 	tp->snd_cwnd_stamp = tcp_time_stamp;
++    
++   //Below was our previous attempt to log undo related variables 	
++   /* printk("tcp_undo_cwr called, before:%d,%d, after:%d,%d, ",before_cwnd,*/
++			/*before_ssthresh, tp->snd_cwnd, tp->snd_ssthresh);*/
+ }
+ 
+ static inline bool tcp_may_undo(const struct tcp_sock *tp)
+diff --git a/net/ipv4/tcp_ipv4.c b/net/ipv4/tcp_ipv4.c
+index 7999fc5..58cebe1 100644
+--- a/net/ipv4/tcp_ipv4.c
++++ b/net/ipv4/tcp_ipv4.c
+@@ -2033,8 +2033,13 @@ process:
+ 		else
+ #endif
+ 		{
+-			if (!tcp_prequeue(sk, skb))
++
++			if (!tcp_prequeue(sk, skb)){
++				struct tcp_sock *tp = tcp_sk(sk); // used to record current TCP state variable before processing incoming packets for logging traces, which will be used for feedback analysis later 
++				printk("a,c:%u,s:%u,ca:%u,r:%u,o:%u", tp->snd_cwnd, tp->snd_ssthresh, inet_csk(sk)->icsk_ca_state, tp->srtt >> 3, tp->rttvar >> 2);
+ 				ret = tcp_v4_do_rcv(sk, skb);
++			}
++
+ 		}
+ 	} else if (unlikely(sk_add_backlog(sk, skb,
+ 					   sk->sk_rcvbuf + sk->sk_sndbuf))) {
+@@ -2043,10 +2048,9 @@ process:
+ 		goto discard_and_relse;
+ 	}
+ 	bh_unlock_sock(sk);
+-
+ 	sock_put(sk);
+ 
+-	return ret;
++   	return ret;
+ 
+ no_tcp_socket:
+ 	if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb))
+diff --git a/net/ipv4/tcp_output.c b/net/ipv4/tcp_output.c
+index ec335fa..2f60745 100644
+--- a/net/ipv4/tcp_output.c
++++ b/net/ipv4/tcp_output.c
+@@ -946,7 +946,7 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
+ 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
+ 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
+ 			      tcp_skb_pcount(skb));
+-
++	printk("d,c:%u,s:%u,ca:%u,r:%u,o:%u", tp->snd_cwnd, tp->snd_ssthresh, icsk->icsk_ca_state,tp->srtt >> 3, tp->rttvar >> 2);// use for recording TCP CA state after sending a TCP packet (from TCP layer) in log traces which are used for feedback later , you could add more target variables as needed.
+ 	err = icsk->icsk_af_ops->queue_xmit(skb, &inet->cork.fl);
+ 	if (likely(err <= 0))
+ 		return err;
