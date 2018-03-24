@@ -119,8 +119,7 @@ int App_speed_type(int flag)
 int Bottneck_Speed_type(int flag)
 {
 	double res = flag + 1;
-	return res; // unit Mbps, from 1(0.1 Mbps) to 1000,00(10Gbps)// unit is 0.1 Mbps// please change ns data-rate.cc unit;
-
+	return res; // unit Mbps, from 1(0.1 Mbps) to 1000,00(10Gbps)// unit is 0.1 Mbps// please change ns3 data-rate.cc unit if want to change unit;
 }
 
 #define Bottleneck_Delay_Last 999// uniform range
@@ -136,7 +135,6 @@ int Router_Queue_type(int flag)
 	double res = 10 + flag;
 	return res;  // [10, 200%]
 }
-
 
 #define Cross_Traffic_Last 90// uniform range
 int Cross_Traffic_type(int flag)
@@ -162,6 +160,7 @@ void random_input_value(struct Test_Parems& test_para)
 	test_para.sftgma.shift = Shift_type(random_flag(Shift_Last));
 }
 
+//previously used for topology 2: multi connections
 void random_input_value_2(struct Test_Parems_2& test_para)
 {
 	test_para.bottneck_speed = Bottneck_Speed_type(random_flag(Bottleneck_Speed_Last));

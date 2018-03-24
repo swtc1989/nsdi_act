@@ -1,5 +1,5 @@
 /*************************************************************************
-    > File Name: pearson.cc
+  > File Name: pearson.cc
   > Author: wsun
   > Mail:sunweiflyus@gmail.com
   > Created Time: Wed 19 Apr 2017 09:25:39 PM CDT
@@ -15,8 +15,8 @@ double Person_coefficient(vector<double>& x, vector<double>& y, int n)
 	gsl_vector_const_view gsl_y = gsl_vector_const_view_array( &y[0], y.size() );
 
 	double pearson = gsl_stats_correlation( (double*) gsl_x.vector.data, 1,
-	                                        (double*) gsl_y.vector.data, 1,
-	                                        n );
+			(double*) gsl_y.vector.data, 1,
+			n );
 
 	return pearson;
 }
@@ -217,28 +217,28 @@ int GetId(enum Input_type input_type, struct Test_Parems tmp)
 
 		// for 1000, 10000, 100000 cases
 		/*
-		if (tmp.app_speed >= 1 && tmp.app_speed < 1000) // for double
-		{
-		    tmp_id  = 1;
-		}
-		else if (tmp.app_speed >= 1000 && tmp.app_speed < 1000000)
-		{
-		    tmp_id  = 2;
-		}
-		else if (tmp.app_speed >= 1000000 && tmp.app_speed < 100000000) // for double
-		{
-		    tmp_id  = 3;
-		}
-		else if (tmp.app_speed <= 100000000) // for double
-		{
-		    tmp_id  = 4;
-		}
-		else
-		{
-		    cout << "app_speed:" << tmp.app_speed << "error report, app_speed \n";
-		    exit(-1);
-		}
-		*/
+		   if (tmp.app_speed >= 1 && tmp.app_speed < 1000) // for double
+		   {
+		   tmp_id  = 1;
+		   }
+		   else if (tmp.app_speed >= 1000 && tmp.app_speed < 1000000)
+		   {
+		   tmp_id  = 2;
+		   }
+		   else if (tmp.app_speed >= 1000000 && tmp.app_speed < 100000000) // for double
+		   {
+		   tmp_id  = 3;
+		   }
+		   else if (tmp.app_speed <= 100000000) // for double
+		   {
+		   tmp_id  = 4;
+		   }
+		   else
+		   {
+		   cout << "app_speed:" << tmp.app_speed << "error report, app_speed \n";
+		   exit(-1);
+		   }
+		   */
 
 		id = 10 * id;
 		id += tmp_id;
@@ -708,7 +708,7 @@ int pearson_corrleation(vector<pair<struct Test_Parems, Record_average> > input_
 	struct single_input_all_output single_corrleation;
 	struct single_input_all_output total_single_corrleation;
 	int counter = 0;
-	//
+
 	for (int m = 0 ; m < Input_type_end; m++)
 	{
 		counter = 0;
@@ -755,15 +755,15 @@ int pearson_corrleation(vector<pair<struct Test_Parems, Record_average> > input_
 		total_single_corrleation._state /= counter;
 
 		total_single_corrleation.inputType = input.input_type;
-		//if (DEBUG)
+		if (DEBUG)
 		cout << "Update Type: " << m << ", "
-		     << " samples: " << counter
-		     << " correlation cwnd: " << total_single_corrleation._cwnd
-		     << " correlation ssth: " << total_single_corrleation._ssth
-		     << " correlation srtt: " << total_single_corrleation._srtt
-		     << " correlation rttvar: " << total_single_corrleation._rttvar
-		     << " correlation state: " << total_single_corrleation._state
-		     << endl;
+			<< " samples: " << counter
+			<< " correlation cwnd: " << total_single_corrleation._cwnd
+			<< " correlation ssth: " << total_single_corrleation._ssth
+			<< " correlation srtt: " << total_single_corrleation._srtt
+			<< " correlation rttvar: " << total_single_corrleation._rttvar
+			<< " correlation state: " << total_single_corrleation._state
+			<< endl;
 
 		pearson_corrleation_update(total_single_corrleation, total_input_output_map);
 	}

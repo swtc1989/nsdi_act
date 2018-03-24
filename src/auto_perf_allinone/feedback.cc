@@ -549,7 +549,6 @@ int generate_new_test_para_vec_1D(int feedback_mode, Output_type output, struct 
 
 			a1 = random_range_double();
 			a2 = 1 - a1;
-
 			new_test_para.app_speed = a1 * it_config->second[config_index].app_speed + a2 * test_limit.app_speed_dec_output_vec[random_range_zero(test_limit.app_speed_dec_output_vec.size())];
 
 			new_test_para.rng_run = total_execution + 1;

@@ -1,10 +1,10 @@
 /*************************************************************************
-> File Name: share.h
-int  > Author: Wei Sun
-> Mail:sunweiflyus@gmail.com
-> Created Time: Sat 26 Nov 2016 07:53:03 PM CST
-> Comments:
-************************************************************************/
+  > File Name: share.h
+  int  > Author: Wei Sun
+  > Mail:sunweiflyus@gmail.com
+  > Created Time: Sat 26 Nov 2016 07:53:03 PM CST
+  > Comments:
+ ************************************************************************/
 #ifndef __SHARE_H__
 #define __SHARE_H__
 #include <utility>
@@ -53,16 +53,16 @@ struct single_input_all_output
 	{
 		switch (type)
 		{
-		case cwnd:
-			return _cwnd;
-		case ssth:
-			return _ssth;
-		case srtt:
-			return _srtt;
-		case rttvar:
-			return _rttvar;
-		case state:
-			return _state;
+			case cwnd:
+				return _cwnd;
+			case ssth:
+				return _ssth;
+			case srtt:
+				return _srtt;
+			case rttvar:
+				return _rttvar;
+			case state:
+				return _state;
 		}
 		return 0;
 	}
@@ -73,11 +73,11 @@ struct INPUT_ELEMENT
 	enum Input_type input_type;
 	int id; // for the other dimension
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & input_type;
-		ar & id;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & input_type;
+			ar & id;
+		}
 
 	bool operator==(const INPUT_ELEMENT& other) const
 	{
@@ -101,9 +101,6 @@ struct INPUT_ELEMENT
 };
 
 typedef map<pair<enum Input_type, enum Output_type>, int > INPUT_OUT_MAP;
-
-//typedef map<INPUT_ELEMENT, INPUT_OUT_MAP_EACH> INPUT_OUT_MAP;
-
 typedef map<pair<enum Input_type_2, enum Output_type>, int > INPUT_OUT_MAP_2;
 
 struct RANGE_INFO
@@ -121,15 +118,15 @@ struct RANGE_INFO
 	}
 
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & cwnd_range;
-		ar & ssth_range;
-		ar & rtt_range;
-		ar & rtvar_range;
-		ar & state_range;
-		ar & total;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & cwnd_range;
+			ar & ssth_range;
+			ar & rtt_range;
+			ar & rtvar_range;
+			ar & state_range;
+			ar & total;
+		}
 };
 
 struct Record_average
@@ -141,14 +138,14 @@ struct Record_average
 	double state_aver;
 
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & cwnd_aver;
-		ar & ssth_aver;
-		ar & rtt_aver;
-		ar & rttvar_aver;
-		ar & state_aver;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & cwnd_aver;
+			ar & ssth_aver;
+			ar & rtt_aver;
+			ar & rttvar_aver;
+			ar & state_aver;
+		}
 
 	bool operator==(const Record_average& other) const
 	{
@@ -163,19 +160,18 @@ struct Shift_Gamma
 	double shift;
 
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & alpha;
-		ar & beta;
-		ar & shift;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & alpha;
+			ar & beta;
+			ar & shift;
+		}
 
 	bool operator==(const Shift_Gamma& other) const
 	{
 		return (alpha == other.alpha && beta == other.beta && shift == other.shift);
 	}
 };
-
 #define SPEED_UP 100000
 #define SPEED_LOW 1
 
@@ -191,12 +187,8 @@ struct Shift_Gamma
 #define SHIFT_UP 1000
 #define SHIFT_LOW 0
 
-/*#define APP_UP 100000000 // 100Gbps*/
-//#define APP_LOW 1 // unit kbps
-
-#define APP_UP  4// 100Gbps
+#define APP_UP 100000000 // 100Gbps
 #define APP_LOW 1 // unit kbps
-
 
 struct Test_Parems_Limite
 {
@@ -234,24 +226,24 @@ struct Test_Parems_2
 	int64_t curr_time;
 
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & access_speed;
-		ar & access_delay;
-		ar & bottneck_speed;
-		ar & bottneck_delay;
-		ar & router_queue_size;
-		ar & cross_traffic_size;
-		ar & rng_run;
-		ar & curr_time;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & access_speed;
+			ar & access_delay;
+			ar & bottneck_speed;
+			ar & bottneck_delay;
+			ar & router_queue_size;
+			ar & cross_traffic_size;
+			ar & rng_run;
+			ar & curr_time;
+		}
 
 	bool operator==(const Test_Parems_2& other) const
 	{
 		return (access_speed == other.access_speed && access_speed == other.access_speed &&
-		        bottneck_speed == other.bottneck_speed && bottneck_delay == other.bottneck_delay &&
-		        router_queue_size == other.router_queue_size && cross_traffic_size == other.cross_traffic_size
-		        && rng_run == other.rng_run && curr_time == other.curr_time);
+				bottneck_speed == other.bottneck_speed && bottneck_delay == other.bottneck_delay &&
+				router_queue_size == other.router_queue_size && cross_traffic_size == other.cross_traffic_size
+				&& rng_run == other.rng_run && curr_time == other.curr_time);
 	}
 
 	bool operator<(const Test_Parems_2& other) const
@@ -293,7 +285,6 @@ struct Test_Parems_2
 
 		return false; //operator== is not used by std::set. Elements a and b are considered equal iff !(a < b) && !(b < a)
 	}
-
 };
 
 struct Test_Parems
@@ -306,15 +297,15 @@ struct Test_Parems
 	int64_t curr_time;
 
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & speed;
-		ar & sftgma;
-		ar & Loss_rate;
-		ar & app_speed;
-		ar & rng_run;
-		ar & curr_time;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & speed;
+			ar & sftgma;
+			ar & Loss_rate;
+			ar & app_speed;
+			ar & rng_run;
+			ar & curr_time;
+		}
 	Test_Parems()
 	{
 		curr_time = 0; // for feedback 1 it is always 0
@@ -323,21 +314,21 @@ struct Test_Parems
 	void print()
 	{
 		cout << "speed:" << speed
-		     << " alph:" << sftgma.alpha
-		     << " beta:" << sftgma.beta
-		     << " shift:" << sftgma.shift
-		     << " loss:" << Loss_rate
-		     << " app_speed:" << app_speed
-		     << " seed:" << rng_run
-		     << " time:" << curr_time
-		     << "\n";
+			<< " alph:" << sftgma.alpha
+			<< " beta:" << sftgma.beta
+			<< " shift:" << sftgma.shift
+			<< " loss:" << Loss_rate
+			<< " app_speed:" << app_speed
+			<< " seed:" << rng_run
+			<< " time:" << curr_time
+			<< "\n";
 	}
 
 
 	bool operator==(const Test_Parems& other) const
 	{
 		return (speed == other.speed && sftgma == other.sftgma && Loss_rate == other.Loss_rate && app_speed == other.app_speed
-		        && rng_run == other.rng_run && curr_time == other.curr_time);
+				&& rng_run == other.rng_run && curr_time == other.curr_time);
 	}
 
 	bool operator<(const Test_Parems& other) const
@@ -382,7 +373,6 @@ struct Test_Parems
 
 };
 
-
 struct State_Record
 {
 	//int counter;//used for counter
@@ -401,24 +391,24 @@ struct State_Record
 	void print()
 	{
 		cout << "cwnd:" << cwnd
-		     << " ssth:" << ssthresh
-		     << " srtt:" << srtt
-		     << " rttvar:" << rttvar
-		     << " ca_state:" << tcp_state
-		     << " switching_time:" << curr_time
-		     << "\n";
+			<< " ssth:" << ssthresh
+			<< " srtt:" << srtt
+			<< " rttvar:" << rttvar
+			<< " ca_state:" << tcp_state
+			<< " switching_time:" << curr_time
+			<< "\n";
 	}
 
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & cwnd;
-		ar & ssthresh;
-		ar & srtt;
-		ar & rttvar;
-		ar & tcp_state;
-		ar & curr_time;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & cwnd;
+			ar & ssthresh;
+			ar & srtt;
+			ar & rttvar;
+			ar & tcp_state;
+			ar & curr_time;
+		}
 
 	State_Record()
 	{
@@ -486,14 +476,10 @@ struct Test_Stack_elem
 };
 
 typedef set<struct State_Record> State_Space_Per;
-//typedef set<vector<struct Test_Parems> > SET_Test_Parems;
 typedef map<struct State_Record, int> State_Space_Map;
 typedef map<int, vector<struct Test_Parems> > Config_Map;
-//typedef map<struct Test_Parems, vector<struct Test_Parems> > Coarse_Map;
-
 typedef map<int, int> Coarse_Map;
 typedef map<struct State_Record, Coarse_Map> Cube_State_Map;
-
 typedef map<struct Test_Parems_2, vector<struct Test_Parems_2> > Coarse_Map_2;
 typedef map<struct State_Record, Coarse_Map_2> Cube_State_Map_2;
 
@@ -509,12 +495,12 @@ struct Grans_coverage_map
 	}
 
 	template<class Archive>
-	void serialize(Archive &ar, const unsigned int version)
-	{
-		ar & granularity;
-		ar & coverage_map;
-		ar & range_info;
-	}
+		void serialize(Archive &ar, const unsigned int version)
+		{
+			ar & granularity;
+			ar & coverage_map;
+			ar & range_info;
+		}
 
 };
 
@@ -524,7 +510,7 @@ template< typename T >
 class mycomparison2
 {
 	bool reverse;
-public:
+	public:
 	mycomparison2(const bool& revparam = true) //false, return largest
 	{
 		reverse = revparam;
@@ -536,8 +522,6 @@ public:
 		else return (lhs.config_id < rhs.config_id);
 	}
 };
-
-//typedef pair<struct State_Record, int> PAIR_DISTANCE;
 
 typedef struct State_Record PAIR_DISTANCE; // no need to be pair, use config_id to represent the distance
 typedef pair<struct State_Record, struct State_Record> PAIR_STATE;

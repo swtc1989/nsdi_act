@@ -1,5 +1,5 @@
 /*************************************************************************
-    > File Name: main.cc
+  > File Name: main.cc
   > Author: wsun
   > Mail:sunweiflyus@gmail.com
   > Created Time: Thu 13 Apr 2017 09:46:38 PM CDT
@@ -164,24 +164,24 @@ void prepare_before_config_vec(vector<struct Test_Parems>& vec_test_para)
 		for (unsigned int i = 0; i < vec_test_para.size(); i++)
 		{
 			output_file << vec_test_para[i].speed
-			            << " " << vec_test_para[i].sftgma.alpha
-			            << " " << vec_test_para[i].sftgma.beta
-			            << " " << vec_test_para[i].sftgma.shift
-			            << " " << vec_test_para[i].Loss_rate
-			            << " " << vec_test_para[i].app_speed
-			            << " " << vec_test_para[i].rng_run
-			            << " " << vec_test_para[i].curr_time
-			            << "\n";
+				<< " " << vec_test_para[i].sftgma.alpha
+				<< " " << vec_test_para[i].sftgma.beta
+				<< " " << vec_test_para[i].sftgma.shift
+				<< " " << vec_test_para[i].Loss_rate
+				<< " " << vec_test_para[i].app_speed
+				<< " " << vec_test_para[i].rng_run
+				<< " " << vec_test_para[i].curr_time
+				<< "\n";
 			if (DEBUG)
 				cout << vec_test_para[i].speed
-				     << " " << vec_test_para[i].sftgma.alpha
-				     << " " << vec_test_para[i].sftgma.beta
-				     << " " << vec_test_para[i].sftgma.shift
-				     << " " << vec_test_para[i].Loss_rate
-				     << " " << vec_test_para[i].app_speed
-				     << " " << vec_test_para[i].rng_run
-				     << " " << vec_test_para[i].curr_time
-				     << "\n";
+					<< " " << vec_test_para[i].sftgma.alpha
+					<< " " << vec_test_para[i].sftgma.beta
+					<< " " << vec_test_para[i].sftgma.shift
+					<< " " << vec_test_para[i].Loss_rate
+					<< " " << vec_test_para[i].app_speed
+					<< " " << vec_test_para[i].rng_run
+					<< " " << vec_test_para[i].curr_time
+					<< "\n";
 
 		}
 		output_file.close();
@@ -260,7 +260,6 @@ int cmd_init_random()
 	system("sudo rm -r /tmp/output_all");
 	system("sudo rm -r /tmp/input_config.txt");
 	system("sudo mkdir /tmp/output_all");
-
 	return 0;
 }
 
@@ -278,7 +277,8 @@ int cmd_init_feedback() // Todo: change mode
 int purely_random_testing(int mode)
 {
 	int res = 0;
-	for (int i = 1; i <= TRIES_RANDOM; i++)
+	int i = 1;
+	while(1)
 	{
 		cout << "the number of executions " << total_execution << endl;
 		res = try_per_config(i, mode);
@@ -287,16 +287,9 @@ int purely_random_testing(int mode)
 			cout << "random switching at: " << total_execution << endl;
 			return 0;
 		}
+		i++;
 	}
 	return 0;
-}
-
-void exit_handler()
-{
-	cout << "[At Last] 5d coverage:" << endl;
-	cal_coverage_AllGrans(covg_map_vec);
-
-	if (MAIL_MODE) system ("sudo mail -s \"Experiment Finished Mention \" xxx@xxx.com < /dev/null ");
 }
 
 int init_coverage_map_vec()
@@ -318,34 +311,32 @@ int init_coverage_map_vec()
 	return 0;
 }
 
+/*
+Output folder: 
+/tmp/output_all  		for intal random testing
+/tmp/output_feedback1   for feedback1
+/tmp/output_feedback2   for feedback2
+*/
 int main (int argc, char* argv[])
 {
-
-	atexit(exit_handler);
 	freopen("log.txt", "w", stdout); // Log file will generated to log.txt
-	TRIES_RANDOM = 1000000; // currently, it is hardcode, random testing will terminate when coverage saturation
 	MAIL_MODE = 0; //default is disable
-	random_init();
+	random_init(); // init for random generator
 	cout << "free up system memory for this experiment !\n";
 	system("sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches");
-	if (MAIL_MODE) system ("sudo mail -s \"Experiment Begin Mention \" unlcsewsun@gmail.com < /dev/null ");
+
+	if (MAIL_MODE) system ("sudo mail -s \"Experiment Begin Mention \" xxx@example.com < /dev/null ");
 
 	char cmd[512];
 
 	init_coverage_map_vec();
-	if (DEBUG) cout << "purely random start !!" << endl ;
+	cout << "purely random start !!" << endl ;
 	cmd_init_random();
 	purely_random_testing(0);
-
 	pearson_corrleation(input_output_relation, input_output_map); // To get pearson corrleation
 
 	cout << "[Purely Random] 5d coverage:" << endl;
 	cal_coverage_AllGrans(covg_map_vec);
-
-	if (covg_map_vec.size() > 10) // In case more than 10
-	{
-		covg_map_vec.erase(covg_map_vec.begin() + 10, covg_map_vec.end());
-	}
 
 	cmd_init_feedback();
 
@@ -361,9 +352,10 @@ int main (int argc, char* argv[])
 
 	//After feedback coverage
 	cout << "[After Feedback] 5d coverage:" << endl;
-	print_pattern(covg_map_vec[9].coverage_map);
-
 	cout << "total_execution:" << total_execution << endl;
+	cal_coverage_AllGrans(covg_map_vec);
+
+	if (MAIL_MODE) system ("sudo mail -s \"Experiment End Mention \" xxx@example.com < /dev/null ");
 
 	exit(0);
 }
