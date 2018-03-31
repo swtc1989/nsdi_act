@@ -1,0 +1,208 @@
+diff --git a/net/ipv4/tcp_cubic.c b/net/ipv4/tcp_cubic.c
+index a9077f4..781d56a 100644
+--- a/net/ipv4/tcp_cubic.c
++++ b/net/ipv4/tcp_cubic.c
+@@ -98,7 +98,8 @@ struct bictcp {
+ 	u8	sample_cnt;	/* number of samples to decide curr_rtt */
+ 	u8	found;		/* the exit point is found? */
+ 	u32	round_start;	/* beginning of each round */
+-	u32	end_seq;	/* end_seq of the round */
++	u16	end_seq;	/* end_seq of the round */
++	u16	target;		/* bic_target of last update */
+ 	u32	last_ack;	/* last time when the ACK spacing is close */
+ 	u32	curr_rtt;	/* the minimum rtt of current round */
+ };
+@@ -140,12 +141,18 @@ static inline void bictcp_hystart_reset(struct sock *sk)
+ }
+ 
+ static void bictcp_init(struct sock *sk)
+-{
++{	
++	/*
++	//Below is the example to enable cubic feature in source code, current DCE cannot configure it like Linux cmd
++	hystart = 1;  
++	fast_convergence = 1;
++	tcp_friendliness = 1;
++	*/
+ 	struct bictcp *ca = inet_csk_ca(sk);
+ 
+ 	bictcp_reset(ca);
+ 	ca->loss_cwnd = 0;
+-
++	ca->target = 0;
+ 	if (hystart)
+ 		bictcp_hystart_reset(sk);
+ 
+@@ -272,7 +279,7 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
+ 	} else {
+ 		ca->cnt = 100 * cwnd;              /* very small increment*/
+ 	}
+-
++		ca->target = bic_target;
+ 	/*
+ 	 * The initial growth of cubic function may be too conservative
+ 	 * when the available bandwidth is still unknown.
+@@ -300,6 +307,8 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
+ 	ca->cnt = (ca->cnt << ACK_RATIO_SHIFT) / ca->delayed_ack;
+ 	if (ca->cnt == 0)			/* cannot be zero */
+ 		ca->cnt = 1;
++
++	printk("[bic_update] ca->cnt:%u, bic_target:%u", ca->cnt, bic_target); // CA algorithm-specific log trace used for feedback, you could add more according to target variables in related probe places 
+ }
+ 
+ static void bictcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
+diff --git a/net/ipv4/tcp_htcp.c b/net/ipv4/tcp_htcp.c
+index c1a8175..9844252 100644
+--- a/net/ipv4/tcp_htcp.c
++++ b/net/ipv4/tcp_htcp.c
+@@ -224,6 +224,9 @@ static u32 htcp_recalc_ssthresh(struct sock *sk)
+ 	const struct htcp *ca = inet_csk_ca(sk);
+ 
+ 	htcp_param_update(sk);
++
++	printk("[alph_update] c:%u, a:%u,res:%d", tp->snd_cwnd, ca->alpha, (ca->alpha>>7) >= tp->snd_cwnd ? 1 : 0);
++
+ 	return max((tp->snd_cwnd * ca->beta) >> 7, 2U);
+ }
+ 
+@@ -246,6 +249,7 @@ static void htcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
+ 				tp->snd_cwnd++;
+ 			tp->snd_cwnd_cnt = 0;
+ 			htcp_alpha_update(ca);
++		printk("[alph_update] c:%u, a:%u,res:%d", tp->snd_cwnd, ca->alpha, (ca->alpha>>7) >= tp->snd_cwnd ? 1:0 );
+ 		} else
+ 			tp->snd_cwnd_cnt += ca->pkts_acked;
+ 
+diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
+index 9c62257..bb9fa99 100644
+--- a/net/ipv4/tcp_input.c
++++ b/net/ipv4/tcp_input.c
+@@ -2310,6 +2310,8 @@ static void DBGUNDO(struct sock *sk, const char *msg)
+ static void tcp_undo_cwr(struct sock *sk, const bool undo_ssthresh)
+ {
+ 	struct tcp_sock *tp = tcp_sk(sk);
++	//int before_cwnd = tp->snd_cwnd; // Previous used for logging
++	//int before_ssthresh = tp->snd_ssthresh; // Previous used for logging
+ 
+ 	if (tp->prior_ssthresh) {
+ 		const struct inet_connection_sock *icsk = inet_csk(sk);
+@@ -2327,6 +2329,10 @@ static void tcp_undo_cwr(struct sock *sk, const bool undo_ssthresh)
+ 		tp->snd_cwnd = max(tp->snd_cwnd, tp->snd_ssthresh);
+ 	}
+ 	tp->snd_cwnd_stamp = tcp_time_stamp;
++    
++   //Below was our previous attempt to log undo related variables 	
++   /* printk("tcp_undo_cwr called, before:%d,%d, after:%d,%d, ",before_cwnd,*/
++			/*before_ssthresh, tp->snd_cwnd, tp->snd_ssthresh);*/
+ }
+ 
+ static inline bool tcp_may_undo(const struct tcp_sock *tp)
+diff --git a/net/ipv4/tcp_ipv4.c b/net/ipv4/tcp_ipv4.c
+index 7999fc5..94c2f63 100644
+--- a/net/ipv4/tcp_ipv4.c
++++ b/net/ipv4/tcp_ipv4.c
+@@ -89,6 +89,30 @@ int sysctl_tcp_tw_reuse __read_mostly;
+ int sysctl_tcp_low_latency __read_mostly;
+ EXPORT_SYMBOL(sysctl_tcp_low_latency);
+ 
++/* BIC TCP Parameters */
++struct bictcp {
++	u32	cnt;		/* increase cwnd by 1 after ACKs */
++	u32 	last_max_cwnd;	/* last maximum snd_cwnd */
++	u32	loss_cwnd;	/* congestion window at last loss */
++	u32	last_cwnd;	/* the last snd_cwnd */
++	u32	last_time;	/* time when updated last_cwnd */
++	u32	bic_origin_point;/* origin point of bic function */
++	u32	bic_K;		/* time to origin point from the beginning of the current epoch */
++	u32	delay_min;	/* min delay (msec << 3) */
++	u32	epoch_start;	/* beginning of an epoch */
++	u32	ack_cnt;	/* number of acks */
++	u32	tcp_cwnd;	/* estimated tcp cwnd */
++#define ACK_RATIO_SHIFT	4
++#define ACK_RATIO_LIMIT (32u << ACK_RATIO_SHIFT)
++	u16	delayed_ack;	/* estimate the ratio of Packets/ACKs << 4 */
++	u8	sample_cnt;	/* number of samples to decide curr_rtt */
++	u8	found;		/* the exit point is found? */
++	u32	round_start;	/* beginning of each round */
++	u16	end_seq;	/* end_seq of the round */
++	u16	target;		/* bic_target of last update */
++	u32	last_ack;	/* last time when the ACK spacing is close */
++	u32	curr_rtt;	/* the minimum rtt of current round */
++};
+ 
+ #ifdef CONFIG_TCP_MD5SIG
+ static int tcp_v4_md5_hash_hdr(char *md5_hash, const struct tcp_md5sig_key *key,
+@@ -2033,8 +2057,14 @@ process:
+ 		else
+ #endif
+ 		{
+-			if (!tcp_prequeue(sk, skb))
++
++			if (!tcp_prequeue(sk, skb)){
++				struct tcp_sock *tp = tcp_sk(sk); // used to record current TCP state variable before processing incoming packets for logging traces, which will be used for feedback analysis later 
++				struct bictcp *ca = inet_csk_ca(sk);
++				printk("a,c:%u,s:%u,ca:%u,r:%u,o:%u,t:%u", tp->snd_cwnd, tp->snd_ssthresh, inet_csk(sk)->icsk_ca_state, tp->srtt >> 3, tp->rttvar >> 2, ca->target);
+ 				ret = tcp_v4_do_rcv(sk, skb);
++			}
++
+ 		}
+ 	} else if (unlikely(sk_add_backlog(sk, skb,
+ 					   sk->sk_rcvbuf + sk->sk_sndbuf))) {
+@@ -2043,10 +2073,9 @@ process:
+ 		goto discard_and_relse;
+ 	}
+ 	bh_unlock_sock(sk);
+-
+ 	sock_put(sk);
+ 
+-	return ret;
++   	return ret;
+ 
+ no_tcp_socket:
+ 	if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb))
+diff --git a/net/ipv4/tcp_output.c b/net/ipv4/tcp_output.c
+index ec335fa..86c10b9 100644
+--- a/net/ipv4/tcp_output.c
++++ b/net/ipv4/tcp_output.c
+@@ -42,6 +42,31 @@
+ #include <linux/gfp.h>
+ #include <linux/module.h>
+ 
++/* BIC TCP Parameters */
++struct bictcp {
++	u32	cnt;		/* increase cwnd by 1 after ACKs */
++	u32 	last_max_cwnd;	/* last maximum snd_cwnd */
++	u32	loss_cwnd;	/* congestion window at last loss */
++	u32	last_cwnd;	/* the last snd_cwnd */
++	u32	last_time;	/* time when updated last_cwnd */
++	u32	bic_origin_point;/* origin point of bic function */
++	u32	bic_K;		/* time to origin point from the beginning of the current epoch */
++	u32	delay_min;	/* min delay (msec << 3) */
++	u32	epoch_start;	/* beginning of an epoch */
++	u32	ack_cnt;	/* number of acks */
++	u32	tcp_cwnd;	/* estimated tcp cwnd */
++#define ACK_RATIO_SHIFT	4
++#define ACK_RATIO_LIMIT (32u << ACK_RATIO_SHIFT)
++	u16	delayed_ack;	/* estimate the ratio of Packets/ACKs << 4 */
++	u8	sample_cnt;	/* number of samples to decide curr_rtt */
++	u8	found;		/* the exit point is found? */
++	u32	round_start;	/* beginning of each round */
++	u16	end_seq;	/* end_seq of the round */
++	u16	target;		/* bic_target of last update */
++	u32	last_ack;	/* last time when the ACK spacing is close */
++	u32	curr_rtt;	/* the minimum rtt of current round */
++};
++
+ /* People can turn this off for buggy TCP's found in printers etc. */
+ int sysctl_tcp_retrans_collapse __read_mostly = 1;
+ 
+@@ -946,7 +971,8 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
+ 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
+ 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
+ 			      tcp_skb_pcount(skb));
+-
++	struct bictcp *ca = inet_csk_ca(sk);
++	printk("d,c:%u,s:%u,ca:%u,r:%u,o:%u,t:%u", tp->snd_cwnd, tp->snd_ssthresh, icsk->icsk_ca_state,tp->srtt >> 3, tp->rttvar >> 2, ca->target);// use for recording TCP CA state after sending a TCP packet (from TCP layer) in log traces which are used for feedback later , you could add more target variables as needed%
+ 	err = icsk->icsk_af_ops->queue_xmit(skb, &inet->cork.fl);
+ 	if (likely(err <= 0))
+ 		return err;

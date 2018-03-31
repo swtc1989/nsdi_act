@@ -31,15 +31,15 @@ INPUT_OUT_MAP input_output_map;
 
 int index_i = 0;
 int granularity = 1;
-
+//format:d,c:%u,s:%u,ca:%u,r:%u,o:%u,t:%u
 int convert_string_to_elem(string& line, COVG_MAP_VEC& trace, Config_Map& map_config, vector<struct Test_Parems>& test_para_vec)
 {
-	if (line[0] != 'd' && line[0] != 'a' ) // sanity check
+	if (line[0] != 'd' && line[0] != 'a' ) // sanity check: for depart/arrival
 		return 1;
 
-	unsigned int cwnd, ssthresh, srtt, rttvar, state ;
+	unsigned int cwnd, ssthresh, srtt, rttvar, state, target;
 	int64_t curr_time;
-	int c_left, s_left, ca_left, r_left, o_left, left, u_left;
+	int c_left, s_left, ca_left, r_left, o_left, left, u_left, t_left;
 
 	for (unsigned int i = 0; i < line.size(); i++)
 	{
@@ -63,6 +63,10 @@ int convert_string_to_elem(string& line, COVG_MAP_VEC& trace, Config_Map& map_co
 		{
 			o_left = i + 2;
 		}
+		else if (i < line.size() - 2 && line[i] == 't' && line[i + 1] == ':')
+		{
+			t_left = i + 2;
+		}
 		else if (i < line.size() - 2 && line[i] == 'u' && line[i + 1] == ':')
 		{
 			u_left = i + 2;
@@ -73,7 +77,8 @@ int convert_string_to_elem(string& line, COVG_MAP_VEC& trace, Config_Map& map_co
 	ssthresh = stol(line.substr(s_left, ca_left - 4));
 	state = stol(line.substr(ca_left, r_left - 3));
 	srtt = stol(line.substr(r_left, o_left - 3));
-	rttvar = stol(line.substr(o_left, u_left - 3));
+	rttvar = stol(line.substr(o_left, t_left - 3));
+	target = stol(line.substr(t_left, u_left - 3));
 	curr_time = stol(line.substr(u_left));
 
 	if (ssthresh == 2147483647) return 0; // remove inital slow start
@@ -84,11 +89,12 @@ int convert_string_to_elem(string& line, COVG_MAP_VEC& trace, Config_Map& map_co
 	average_record.rtt_aver += (srtt - average_record.rtt_aver) * 1.0 / (index_i + 1);
 	average_record.rttvar_aver += (rttvar - average_record.rttvar_aver) * 1.0 / (index_i + 1);
 	average_record.state_aver += (state - average_record.state_aver) * 1.0 / (index_i + 1);
+	average_record.target_aver += (target - average_record.target_aver) * 1.0 / (index_i + 1);
 	index_i++;
 
-	if (cwnd > 0 && cwnd <= CWND_RANGE && ssthresh > 0 && ssthresh <= SSTH_RANGE && srtt > 0 && srtt <= RTT_RANGE && rttvar > 0 && rttvar <= RTVAR_RANGE && state >= 0 && state < STATE_RANGE && curr_time > 0)  //ssthresh at least 2
+	if (cwnd > 0 && cwnd <= CWND_RANGE && ssthresh > 0 && ssthresh <= SSTH_RANGE && srtt > 0 && srtt <= RTT_RANGE && rttvar > 0 && rttvar <= RTVAR_RANGE && state >= 0 && state < STATE_RANGE && curr_time > 0 && target > 0 && target <= TARGET_RANGE)  //ssthresh at least 2
 	{
-		struct State_Record tmp(cwnd, ssthresh, srtt, rttvar, state, curr_time);
+		struct State_Record tmp(cwnd, ssthresh, srtt, rttvar, state, target, curr_time);
 		insert_state(tmp, trace, test_para_vec, map_config);
 	}
 	return 0;

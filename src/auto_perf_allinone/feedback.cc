@@ -67,7 +67,7 @@ int find_empty_area_N(State_Record& empty_state, struct Grans_coverage_map& tmp_
 {
 	Cube_State_Map::iterator it ;
 	int counter = FIND_EMPTY_LIMITE;
-	struct State_Record tmp(0, 0, 0, 0, 0, 0);
+	struct State_Record tmp;
 	while (counter > 0)
 	{
 		tmp.cwnd = random_range_zero(tmp_map.range_info.cwnd_range) + 1;// 0 - 1023 in coverage map
@@ -78,7 +78,7 @@ int find_empty_area_N(State_Record& empty_state, struct Grans_coverage_map& tmp_
 
 		// here empty point needs a mapping operation to be searched in coverage map; as the mapping is done when inserting point into coverage map;
 
-		struct State_Record coverage_tmp(0, 0, 0, 0, 0, 0);
+		struct State_Record coverage_tmp;
 		state_granularity_mapping(tmp, tmp_map.granularity, coverage_tmp); // here granularity 1
 
 		it = tmp_map.coverage_map.find(coverage_tmp);
@@ -277,8 +277,8 @@ int generate_new_test_para_vec_1D(int feedback_mode, Output_type output, struct 
 	int index = 0, uprange = 0 , lowrange = -1;
 	int i = 0;
 	Cube_State_Map::iterator it ;
-	struct State_Record empty_set(0, 0, 0, 0, 0, 0);
-	struct State_Record empty_set_record(0, 0, 0, 0, 0, 0);//to remember the mapping empty set given granularity
+	struct State_Record empty_set;
+	struct State_Record empty_set_record;//to remember the mapping empty set given granularity
 	bool upbound_limit = false;
 	bool lowbound_limit = false;
 	State_Record low_state, up_state;
@@ -328,6 +328,10 @@ int generate_new_test_para_vec_1D(int feedback_mode, Output_type output, struct 
 				uprange = covg_map_vec[i].range_info.state_range;
 				index = empty_set.tcp_state;
 				break;
+			case target:
+				uprange = covg_map_vec[i].range_info.target_range;
+				index = empty_set.target;
+				break;
 			default:
 				cout << "No matching output type!!!" << endl;
 				exit(-1);
@@ -356,6 +360,9 @@ int generate_new_test_para_vec_1D(int feedback_mode, Output_type output, struct 
 					break;
 				case state:
 					empty_set.tcp_state = uprange_i;
+					break;
+				case target:
+					empty_set.target = uprange_i;
 					break;
 				default:
 					cout << "No matching output type!!!" << endl;
@@ -397,6 +404,9 @@ int generate_new_test_para_vec_1D(int feedback_mode, Output_type output, struct 
 					break;
 				case state:
 					empty_set.tcp_state = low_i;
+					break;
+				case target:
+					empty_set.target = low_i;
 					break;
 				default:
 					cout << "No matching output type!!!" << endl;
@@ -635,7 +645,7 @@ int generate_new_test_para_vec_1D(int feedback_mode, Output_type output, struct 
 
 int generate_new_test_para_vec_N(int feedback_mode, struct State_Record & empty_set, COVG_MAP_VEC & map_vec, Config_Map & map_config, vector<vector<struct Test_Parems> > & new_test_para_vec, INPUT_OUT_MAP & input_output_map)
 {
-	int i = random_range_zero(5);// 5 d space
+	int i = random_range_zero(Output_type_end);// 6 d space
 	switch (i)
 	{
 	case cwnd:
@@ -648,6 +658,8 @@ int generate_new_test_para_vec_N(int feedback_mode, struct State_Record & empty_
 		return generate_new_test_para_vec_1D(feedback_mode, rttvar, empty_set, map_vec, map_config, new_test_para_vec, input_output_map);
 	case state:
 		return generate_new_test_para_vec_1D(feedback_mode, state, empty_set, map_vec, map_config, new_test_para_vec, input_output_map);
+	case target:
+		return generate_new_test_para_vec_1D(feedback_mode, target, empty_set, map_vec, map_config, new_test_para_vec, input_output_map);
 	default:
 		cout << "No matching output type!!!" << endl;
 		exit(-1);
@@ -680,6 +692,7 @@ int feedback_random_N(int feedback_mode, COVG_MAP_VEC & map_vec, Config_Map& map
 			     << " " << empty_set.srtt
 			     << " " << empty_set.rttvar
 			     << " " << empty_set.tcp_state
+			     << " " << empty_set.target
 			     << endl;
 		}
 
