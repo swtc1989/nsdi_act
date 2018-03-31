@@ -1,0 +1,15 @@
+set terminal post eps font "Times-Roman, 36"
+set termopt enhanced
+set size 1.5,1
+set output '2d_cwnd_time.eps'
+#set key left at 5,150
+#set xtics 3000,5000,100000
+#set logscale x
+set ylabel "Cwnd"
+set xlabel "Time(sec)"
+#set xrange[38.53:40.15] ##Line 20709, 38535631080 ##Line 21189, 40150817687
+#set ytics 10, 100, 500
+#set yrange[0:5]
+#
+plot "cwnd_ts.txt" using ($2/1000000000):1 w lp lc 1 title "Cubic"
+

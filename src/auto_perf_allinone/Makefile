@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall
+CXXFLAGS = -std=c++11 -O2 -w
 SRC = ~/ACT/ns-3-dce/build/allinone_main
 SRC3 = ~/ACT/ns-3-dce/build/mannual_model1_main
 DIR = ~/ACT/ns-3-dce/build/

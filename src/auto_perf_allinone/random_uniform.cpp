@@ -93,25 +93,32 @@ double Shift_type(int flag)
 	return res; // [0 - 1000] ms // one way delay, 512*4
 }
 
-#define App_Last 3// uniform range, last is 3, previous a bug
+/*#define App_Last 3// uniform range, last is 3, previous a bug*/
+//int App_speed_type(int flag)
+//{
+	//int res = 0;
+	//switch (flag)
+	//{
+	//case 0:
+		//res = 1;//1 kbps //unit is 1000 in dce-linux.cc file
+		//break;
+	//case 1:
+		//res = 1000;//1 Mbps
+		//break;
+	//case 2:
+		//res = 1000000; //1 Gbps
+		//break;
+	//case 3:
+		//res = 100000000; // 100 Gbps
+		//break;
+	//}
+	//return res;
+/*}*/
+
+#define App_Last  99999999// uniform range[1, 100000000), from 1kbps to 100 Gbps
 int App_speed_type(int flag)
 {
-	int res = 0;
-	switch (flag)
-	{
-	case 0:
-		res = 1;//1 kbps //unit is 1000 in dce-linux.cc file
-		break;
-	case 1:
-		res = 1000;//1 Mbps
-		break;
-	case 2:
-		res = 1000000; //1 Gbps
-		break;
-	case 3:
-		res = 100000000; // 100 Gbps
-		break;
-	}
+	int res = 1 + flag;
 	return res;
 }
 

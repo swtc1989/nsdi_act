@@ -1,0 +1,2 @@
+e.g.,
+.offline_checker 30001 50000 ~/DATA_STORAGE/exp1/output_feedback2/ 3 > out

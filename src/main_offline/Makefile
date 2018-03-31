@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall -g
+CXXFLAGS = -std=c++11 -g
 SRC = offline_checker
 
 offline_checker: offline_checker.cc  share.h

@@ -157,18 +157,14 @@ int checker_rule3(char* filename1, State_Record_Vector& state_vec)
 					int curr_target = state_vec[j].ssthresh;
 					int curr_ssth = state_vec[j - 1].ssthresh; //flag is not 2, which is not bic_update record
 
-					//if (curr_cnt == 0 && curr_target > 1000)
-					if (curr_target > 5 * curr_cwnd)
-					{
-						//  cout << "curr_cnt == 0 !!"<<endl;
-					}
-					else
+   /*               //if (curr_cnt == 0 && curr_target > 1000)*/
+					if (curr_target <= 2 * curr_cwnd)
 					{
 						break;
 					}
 
 					int curr_srtt = state_vec[j + 1].srtt;
-					int linux_srtt = 4 * 4 * max(curr_srtt, prev_srtt);
+					int linux_srtt = 2 * 4 * max(curr_srtt, prev_srtt);
 					//MAX_RTT = 0;
 					int rtt_limit = linux_srtt; //max(MAX_RTT, linux_srtt);
 
@@ -177,7 +173,7 @@ int checker_rule3(char* filename1, State_Record_Vector& state_vec)
 						diff = diff / 1000000; // with ms unit
 						if (diff > rtt_limit)// || curr_cnt == 0)
 						{
-							cout << "[Voilation] for " << filename1 << " [Reason:] the interval between two bic_updates is larger than 10 * current RTT" << ":" << rtt_limit << ", diff:" << diff << " , first bic_update at simulation time:" << start_time << ", second at:" << curr_start_time << " cnt:" << curr_cnt << " cwnd:" << curr_cwnd << " Bic_target:" << curr_target << "." << endl;
+							cout << "[Voilation] for " << filename1 << " [Reason:] the interval between two bic_updates is larger much than 2 * current RTT" << ":" << rtt_limit << ", diff:" << diff << " , first bic_update at simulation time:" << start_time << ", second at:" << curr_start_time << " cnt:" << curr_cnt << " cwnd:" << curr_cwnd << " Bic_target:" << curr_target << "." << endl;
 						}
 					}
 					break;
@@ -318,7 +314,7 @@ int read_from_config(char* filename1, vector<struct Test_Parems>& tmp_vec)
 
 			if (tmp_vec[i].app_speed < 1000)
 			{
-				cout << "found filename: " << filename1 << " low speed: " << tmp_vec[i].app_speed << endl ;
+				//cout << "found filename: " << filename1 << " low speed: " << tmp_vec[i].app_speed << endl ;
 				counterexample++;
 				res = 1;
 			}
@@ -328,7 +324,7 @@ int read_from_config(char* filename1, vector<struct Test_Parems>& tmp_vec)
 			{
 				if (tmp_vec[i - 1].app_speed < 1000 && tmp_vec[i].app_speed > 10000)
 				{
-					cout << "found filename: " << filename1 << " low speed: " << tmp_vec[i - 1].app_speed << " high speed: " << tmp_vec[i].app_speed << endl ;
+					//cout << "found filename: " << filename1 << " low speed: " << tmp_vec[i - 1].app_speed << " high speed: " << tmp_vec[i].app_speed << endl ;
 					counterexample++;
 					res = 1;
 				}
@@ -373,17 +369,17 @@ int read_from_file(char* filename1)
 
 int main (int argc, char* argv[])
 {
-	if (argc != 6)
+	if (argc != 5)
 	{
 		// Tell the user how to run the program
-		std::cerr << "Usage: " << argv[0] << " config from num, to num, check files folder path, rule choice(1:rule1, 2:rule2, 3:both), diff" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " config from num, to num, check files folder path, rule choice(1:rule1, 2:rule2, 3:rule3)" << std::endl;
 		return 1;
 	}
 
 	int from = stoi(argv[1]);
 	int to = stoi(argv[2]);
 	choice = stoi(argv[4]);
-	char cmd[256];
+	char cmd[512];
 	int res = 0;
 	vector<struct Test_Parems> vec_test_para;
 	for (int i = from; i <= to ; i++)
@@ -392,10 +388,10 @@ int main (int argc, char* argv[])
 		snprintf (cmd, 512, "%s/config_%d/input_config.txt", argv[3], i);
 		res = read_from_config(cmd, vec_test_para); // for cwnd;
 		//if (res == 0) continue ; //skip this file
-		snprintf (cmd, 256, "%s/config_%d/%d/messages", argv[3], i, i + stoi(argv[5]));
+		snprintf (cmd, 256, "%s/config_%d/%d/messages", argv[3], i, i);
 		read_from_file(cmd);
 		//process each file one by one
 	}
-	cout << "cwnd_max:" << cwnd_max << " cwnd_max_increase:" << max_incr << " cwnd_max_diff:" << max_diff << endl;
+	//cout << "cwnd_max:" << cwnd_max << " cwnd_max_increase:" << max_incr << " cwnd_max_diff:" << max_diff << endl;
 	return 0;
 }

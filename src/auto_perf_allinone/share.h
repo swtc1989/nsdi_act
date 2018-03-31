@@ -20,6 +20,7 @@ using namespace std;
 #define DEBUG 0
 #define CWND_RANGE 1024
 #define SSTH_RANGE 1024
+#define TARGET_RANGE 1024
 #define RTT_RANGE 512
 #define RTVAR_RANGE 256
 #define STATE_RANGE 4 // TCP_CA_CWR cannot cover

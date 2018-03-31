@@ -596,12 +596,11 @@ int generate_new_test_para_vec_1D(int feedback_mode, Output_type output, struct 
 
 			if (tmp_test_parems_vec[0].first.size() == 1 && tmp_test_parems_vec[0].second.size() == 1)
 			{
+				
+				struct Test_Parems new_test_para;
+				new_test_para = (random_range_zero(2) > 0) ? tmp_test_parems_vec[0].first[0] : tmp_test_parems_vec[0].second[0]; // half first, half second;
 				double a1 = random_range_double();
 				double a2 = 1 - a1;
-				struct Test_Parems new_test_para;
-				new_test_para = (a1 > a2) ? tmp_test_parems_vec[0].first[0] : tmp_test_parems_vec[0].second[0]; // half first, half second;
-				a1 = random_range_double();
-				a2 = 1 - a1;
 				new_test_para.Loss_rate = a1 * tmp_test_parems_vec[0].first[0].Loss_rate + a2 * tmp_test_parems_vec[0].second[0].Loss_rate;
 				a1 = random_range_double();
 				a2 = 1 - a1;
