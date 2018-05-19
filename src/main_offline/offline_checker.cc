@@ -157,14 +157,14 @@ int checker_rule3(char* filename1, State_Record_Vector& state_vec)
 					int curr_target = state_vec[j].ssthresh;
 					int curr_ssth = state_vec[j - 1].ssthresh; //flag is not 2, which is not bic_update record
 
-   /*               //if (curr_cnt == 0 && curr_target > 1000)*/
-					if (curr_target <= 2 * curr_cwnd)
+				  //if (curr_cnt == 0 && curr_target > 1000)
+					if (curr_cnt > 1  && curr_target <= 1 * curr_cwnd)
 					{
 						break;
 					}
 
 					int curr_srtt = state_vec[j + 1].srtt;
-					int linux_srtt = 2 * 4 * max(curr_srtt, prev_srtt);
+					int linux_srtt = 6 * 4 * max(curr_srtt, prev_srtt);
 					//MAX_RTT = 0;
 					int rtt_limit = linux_srtt; //max(MAX_RTT, linux_srtt);
 
@@ -173,7 +173,7 @@ int checker_rule3(char* filename1, State_Record_Vector& state_vec)
 						diff = diff / 1000000; // with ms unit
 						if (diff > rtt_limit)// || curr_cnt == 0)
 						{
-							cout << "[Voilation] for " << filename1 << " [Reason:] the interval between two bic_updates is larger much than 2 * current RTT" << ":" << rtt_limit << ", diff:" << diff << " , first bic_update at simulation time:" << start_time << ", second at:" << curr_start_time << " cnt:" << curr_cnt << " cwnd:" << curr_cwnd << " Bic_target:" << curr_target << "." << endl;
+							cout << "[Voilation] for " << filename1 << " [Reason:] the interval between two bic_updates is larger much than current RTT" << ":" << rtt_limit << ", diff:" << diff << " , first bic_update at simulation time:" << start_time << ", second at:" << curr_start_time << " cnt:" << curr_cnt << " cwnd:" << curr_cwnd << " Bic_target:" << curr_target << "." << endl;
 						}
 					}
 					break;

@@ -386,12 +386,12 @@ struct Test_Parems
 struct State_Record
 {
 	//int counter;//used for counter
-	unsigned int cwnd;
-	unsigned int ssthresh;
-	unsigned int srtt;
-	unsigned int rttvar;
-	unsigned int tcp_state;
-	unsigned int target;
+	short int cwnd;
+	short int ssthresh;
+	short int srtt;
+	short int rttvar;
+	short int tcp_state;
+	short int target;
 	uint64_t curr_time;
 
 	bool operator==(const State_Record& other) const

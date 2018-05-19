@@ -92,7 +92,7 @@ int convert_string_to_elem(string& line, COVG_MAP_VEC& trace, Config_Map& map_co
 	average_record.target_aver += (target - average_record.target_aver) * 1.0 / (index_i + 1);
 	index_i++;
 
-	if (cwnd > 0 && cwnd <= CWND_RANGE && ssthresh > 0 && ssthresh <= SSTH_RANGE && srtt > 0 && srtt <= RTT_RANGE && rttvar > 0 && rttvar <= RTVAR_RANGE && state >= 0 && state < STATE_RANGE && curr_time > 0 && target > 0 && target <= TARGET_RANGE)  //ssthresh at least 2
+	if (cwnd > 0 && cwnd <= CWND_RANGE && ssthresh > 0 && ssthresh <= SSTH_RANGE && srtt > 0 && srtt <= RTT_RANGE && rttvar > 0 && rttvar <= RTVAR_RANGE && state >= 0 && state < STATE_RANGE && curr_time > 0 && target >= 0 && target < TARGET_RANGE)  //ssthresh at least 2
 	{
 		struct State_Record tmp(cwnd, ssthresh, srtt, rttvar, state, target, curr_time);
 		insert_state(tmp, trace, test_para_vec, map_config);
@@ -100,10 +100,10 @@ int convert_string_to_elem(string& line, COVG_MAP_VEC& trace, Config_Map& map_co
 	return 0;
 }
 
-//about 1.5 percent of  2048 total size (given 128 size granularity)
-#define COVG_LIMIT_RANDOM  30
-#define COVG_LIMIT_FEEDBACK1  30
-#define COVG_LIMIT_FEEDBACK2  30
+//about 1.5 percent of  2048*8 total size (given 128 size granularity) *8 is for target range
+#define COVG_LIMIT_RANDOM  30*8
+#define COVG_LIMIT_FEEDBACK1  30*8
+#define COVG_LIMIT_FEEDBACK2  30*8
 int total_files = 0;
 int prev_coverage_size = 1;
 

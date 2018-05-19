@@ -1,5 +1,5 @@
 diff --git a/net/ipv4/tcp_cubic.c b/net/ipv4/tcp_cubic.c
-index a9077f4..781d56a 100644
+index a9077f4..7a9e138 100644
 --- a/net/ipv4/tcp_cubic.c
 +++ b/net/ipv4/tcp_cubic.c
 @@ -98,7 +98,8 @@ struct bictcp {
@@ -12,7 +12,15 @@ index a9077f4..781d56a 100644
  	u32	last_ack;	/* last time when the ACK spacing is close */
  	u32	curr_rtt;	/* the minimum rtt of current round */
  };
-@@ -140,12 +141,18 @@ static inline void bictcp_hystart_reset(struct sock *sk)
+@@ -117,6 +118,7 @@ static inline void bictcp_reset(struct bictcp *ca)
+ 	ca->ack_cnt = 0;
+ 	ca->tcp_cwnd = 0;
+ 	ca->found = 0;
++	ca->target = 0;
+ }
+ 
+ static inline u32 bictcp_clock(void)
+@@ -140,12 +142,18 @@ static inline void bictcp_hystart_reset(struct sock *sk)
  }
  
  static void bictcp_init(struct sock *sk)
@@ -33,7 +41,7 @@ index a9077f4..781d56a 100644
  	if (hystart)
  		bictcp_hystart_reset(sk);
  
-@@ -272,7 +279,7 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
+@@ -272,7 +280,7 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
  	} else {
  		ca->cnt = 100 * cwnd;              /* very small increment*/
  	}
@@ -42,7 +50,7 @@ index a9077f4..781d56a 100644
  	/*
  	 * The initial growth of cubic function may be too conservative
  	 * when the available bandwidth is still unknown.
-@@ -300,6 +307,8 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
+@@ -300,6 +308,8 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
  	ca->cnt = (ca->cnt << ACK_RATIO_SHIFT) / ca->delayed_ack;
  	if (ca->cnt == 0)			/* cannot be zero */
  		ca->cnt = 1;

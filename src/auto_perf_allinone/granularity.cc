@@ -25,7 +25,7 @@ int cal_coverage_AllGrans (COVG_MAP_VEC& map_vec)
 int state_granularity_mapping(struct State_Record& old_record, int granularity, struct State_Record& new_record)
 {
 	new_record.cwnd = (old_record.cwnd - 1) / granularity;
-	new_record.target = (old_record.target - 1) / granularity;
+	new_record.target = (old_record.target) / granularity;// it includes 0
 	new_record.ssthresh = (old_record.ssthresh - 1) / granularity;
 	new_record.srtt = (old_record.srtt - 1) / granularity;
 	new_record.rttvar = (old_record.rttvar - 1) / granularity;
@@ -55,7 +55,7 @@ int insert_state(struct State_Record& tmp, COVG_MAP_VEC& map_vec, vector<struct 
 	{
 		granularity = map_vec[i].granularity;
 		int cwnd = (tmp.cwnd - 1) / granularity;
-		int target = (tmp.target - 1) / granularity;
+		int target = (tmp.target) / granularity;
 		int ssthresh = (tmp.ssthresh - 1) / granularity;
 		int srtt = (tmp.srtt - 1) / granularity;
 		int rttvar = (tmp.rttvar - 1) / granularity;
