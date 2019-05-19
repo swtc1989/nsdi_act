@@ -1,7 +1,21 @@
-# nsdi_act
-ACT Testing Platform for TCP implementation
+# Automated Testing Platform for TCP Congestion control (ACT)
 
-Installation
+# Overview
+The implementation of ACT has four main modules: ns3, DCE, Linux kernel, and ase_brain.
+For ns3-dce, system manipulate the packet delay in p2p channel according to given random
+distribution. It takes as input an input parameter configuration (i.e., input.txt).
+
+For Linux kernel, it is a inherently user-space library used by DCE for running a real kernel
+stack. Some probing points are added here to print some target state variable in related kernel functions. Do not forget to copy a new bin_dce (cp liblinux.so ../ns-3-dce/build/bin_dce/)
+every after a new compilation of kernel source.
+
+For ns3-dce, it has customized testing scripts. You could configure different typologies, algorithms in the script. More scripts example could be referred in example folder.
+
+For ase_brain, it automatically generates new test input parameter configuration for verb—ns3-
+dce— simulation. It also processes and analyzes the log traces generate by the simulation to
+
+
+# Installation
 Following are all steps building the whole system, recall that the manual is build based on
 ubuntu 14.04. We need to install customized ns3, Linux kernel stack, DCE, three modules.
 Customized modules needed to be patched before installation.
